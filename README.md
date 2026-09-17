@@ -2,6 +2,8 @@
 
 StuTrade 的 React + TypeScript 前端，使用 Vite 构建。第一版聚焦校园二手书交易，通过统一的挂单、撮合确认和订单流程验证平台的核心能力。
 
+整个项目的产品范围、架构和跨仓库契约以主仓库 `docs/` 为唯一文档真相源。本 README 只说明 Web 实现、交互边界和开发方式，不独立扩展产品语义。
+
 ## MVP 目标
 
 MVP 必须让两名学生完整完成以下三条成交路径：
@@ -129,7 +131,7 @@ StuTrade
 ```text
 stu-trade-web/
 ├── openapi/
-│   └── stu-trade.yaml          # 暂时的 HTTP 契约权威来源
+│   └── stu-trade.yaml          # 可执行 HTTP 结构契约
 ├── e2e/                       # Playwright 三条核心路径
 ├── public/                    # 无需构建处理的静态资源
 ├── src/
@@ -161,7 +163,7 @@ stu-trade-web/
 
 ## HTTP 契约
 
-在宿主后端确认前，前端仓库的 [`openapi/stu-trade.yaml`](openapi/stu-trade.yaml) 是 MVP 的唯一可执行 HTTP 契约来源。`bun run api:generate` 将其生成到 `src/api/generated/schema.ts`；该文件提交到仓库且不得手工编辑，`bun run api:check` 会阻止 schema 与生成类型漂移。后端接受该契约后，若要迁移权威来源，必须在同一变更中切换生成输入，不能维护两份 schema。
+[`openapi/stu-trade.yaml`](openapi/stu-trade.yaml) 是当前机器可执行的 HTTP 结构契约，不能覆盖主仓库 `docs/` 定义的产品语义。`bun run api:generate` 将其生成到 `src/api/generated/schema.ts`；该文件提交到仓库且不得手工编辑，`bun run api:check` 会阻止 schema 与生成类型漂移。后端接受该契约后，若要迁移结构契约的权威位置，必须在同一变更中切换生成输入，不能维护两份 schema。
 
 浏览市集和挂单详情无需登录；发布、停用、撮合、成交和订单操作使用同源 HttpOnly、`SameSite=Lax` 会话 Cookie。生产环境的 Cookie 还必须设置 `Secure`，前端不接收或持久化令牌。建议接口如下：
 
@@ -221,7 +223,8 @@ bun run dev
 ```
 
 开发服务器默认启用 MSW，以当前 OpenAPI 契约返回模拟响应。连接真实后端时设置
-`VITE_ENABLE_MSW=false`。
+`VITE_ENABLE_MSW=false`。`/api` 默认代理到 `http://127.0.0.1:8080`，可通过
+`VITE_BACKEND_URL` 覆盖。
 
 提交前运行：
 
