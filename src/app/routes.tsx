@@ -2,6 +2,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 import { LoginPage, SignupPage } from '../features/auth/pages.tsx'
 import { ProtectedRoute } from '../features/auth/ProtectedRoute.tsx'
 import {
+  MarketplaceDetailPage,
   MarketplacePage,
   ProfilePage,
   PublishPage,
@@ -17,6 +18,14 @@ export const appRoutes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <MarketplacePage /> },
+      {
+        path: 'sell-listings/:listingId',
+        element: <MarketplaceDetailPage kind="sell" />,
+      },
+      {
+        path: 'buy-requests/:listingId',
+        element: <MarketplaceDetailPage kind="buy" />,
+      },
       { path: 'publish', element: <ProtectedRoute><PublishPage /></ProtectedRoute> },
       { path: 'matches', element: <ProtectedRoute><MatchesPage /></ProtectedRoute> },
       { path: 'orders', element: <ProtectedRoute><OrdersPage /></ProtectedRoute> },
