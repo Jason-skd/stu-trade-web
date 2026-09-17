@@ -170,10 +170,11 @@ describe('authentication', () => {
 
   it('logs out and clears the local identity', async () => {
     server.use(http.get('*/api/v1/sessions/current', () => HttpResponse.json(session)), http.delete('*/api/v1/sessions/current', () => new HttpResponse(null, { status: 204 })))
-    renderRoute('/me')
+    const router = renderRoute('/me')
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: '退出登录' }))
     expect(await screen.findByRole('heading', { name: '市集' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
     expect(screen.getByRole('link', { name: '登录' })).toHaveAttribute('href', '/login')
   })
 
