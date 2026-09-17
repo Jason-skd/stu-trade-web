@@ -115,7 +115,7 @@ StuTrade
 
 | 依赖 | 用途 | 引入阶段 |
 | --- | --- | --- |
-| `openapi-typescript` | 从前端暂时维护的 OpenAPI 生成传输类型 | 契约冻结 |
+| `openapi-typescript` | 从前端拥有的 OpenAPI 生成传输类型 | 契约冻结 |
 | `@redocly/cli` | 校验 OpenAPI 结构和约定 | 契约冻结 |
 | `vitest`、`jsdom` | 组件和 hooks 的快速行为测试 | 应用基础 |
 | `@testing-library/react`、`@testing-library/user-event`、`@testing-library/jest-dom` | 从用户行为验证界面 | 应用基础 |

@@ -7,7 +7,7 @@ info:
     identifier: LicenseRef-StuTrade
   description: |
     HTTP contract for the second-hand book MVP. The frontend repository owns
-    this contract until the host service accepts it as its source of truth.
+    this structural contract; the host reviews semantics and implements it.
 servers:
   - url: /api/v1
 security:
