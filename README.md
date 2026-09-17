@@ -220,10 +220,18 @@ bun install
 bun run dev
 ```
 
+开发服务器默认启用 MSW，以当前 OpenAPI 契约返回模拟响应。连接真实后端时设置
+`VITE_ENABLE_MSW=false`。
+
 提交前运行：
 
 ```bash
 bun run check
 ```
 
-测试脚本将在应用基础阶段随对应测试依赖一起加入。
+单独运行行为测试或监听测试：
+
+```bash
+bun run test
+bun run test:watch
+```
