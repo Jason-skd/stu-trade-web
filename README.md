@@ -1,6 +1,6 @@
-# stu-trade-web
+# StuTrade Web
 
-校园交易平台的 React + TypeScript 前端，使用 Vite 构建。
+StuTrade 的 React + TypeScript 前端，使用 Vite 构建。
 
 ## 开发
 
@@ -15,4 +15,3 @@ npm run dev
 npm run lint
 npm run build
 ```
-
