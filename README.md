@@ -1,219 +1,32 @@
 # StuTrade Web
 
-StuTrade 的 React + TypeScript 前端，使用 Vite 构建。第一版聚焦校园二手书交易，通过统一的挂单、撮合确认和订单流程验证平台的核心能力。
+StuTrade Web 是 React + TypeScript 前端，通过 `/api/v1` 与业务宿主协作，并独立构建为静态产物。包管理器和脚本运行器统一使用 Bun。
 
-整个项目的产品范围、架构和跨仓库契约以主仓库 `docs/` 为唯一文档真相源。本 README 只说明 Web 实现、交互边界和开发方式，不独立扩展产品语义。
+## 当前能力
 
-## MVP 目标
+- React 19、TypeScript 6、Vite 8 和 Bun 1.4 基础工程。
+- 桌面顶部导航与移动底部导航组成的响应式应用壳层。
+- 市集、发布、撮合、订单、个人、登录、注册和 404 路由入口。
+- React Query 与会话 Provider 装配。
+- [`openapi/stu-trade.yaml`](openapi/stu-trade.yaml) 及生成的 TypeScript 传输类型。
+- MSW 开发/测试入口、组件行为测试、Oxlint 和完整构建检查。
 
-MVP 必须让两名学生完整完成以下三条成交路径：
-
-1. **自动撮合**：买方发布指定 ISBN 和最高价格的求购，卖方发布同 ISBN 且价格不高于买方预算的书籍；双方确认后按卖方价格成交。
-2. **卖方接单**：卖方浏览求购需求，按买方报价直接接单。
-3. **买方购买**：买方浏览在售书籍，按卖方标价直接购买。
-
-成交后，双方能够查看订单并完成线下交付。公开的开放挂单视为可直接接受的要约，因此主动接单和主动购买不重复要求双方确认；自动撮合产生的建议必须由双方确认后才创建订单。
-
-### 包含范围
-
-- 最小注册、登录和会话恢复
-- 发布、查看和停用二手书出售挂单与求购需求
-- ISBN、书名、作者、成色、价格和备注
-- 按 ISBN 或书名搜索，按挂单类型和成色筛选
-- 自动撮合及双方确认
-- 卖方直接接单和买方直接购买
-- 我的发布、待确认撮合和订单
-- 加载、空状态、校验失败、资源失效和并发冲突反馈
-- 手机与桌面响应式界面
-
-书籍封面是可选展示数据，缺少封面不能阻止发布或交易。
-
-### 不包含范围
-
-- 在线支付、聊天和物流
-- 议价、竞拍、收藏和评价
-- 图片上传与图片管理
-- 自由文本智能匹配
-- 跑腿、租赁和普通二手物品
-- 管理后台和多语言框架
-
-## 产品结构
-
-首页直接进入可操作的市集，不设置营销落地页。
-
-```text
-StuTrade
-├── 市集
-│   ├── 在售书籍
-│   ├── 求购需求
-│   └── 搜索与筛选
-├── 发布
-│   ├── 出售一本书
-│   └── 求购一本书
-├── 撮合
-│   └── 待双方确认
-├── 订单
-│   ├── 待交付
-│   └── 已完成
-└── 我的
-    ├── 我的发布
-    └── 账户与退出
-```
-
-桌面端使用顶部导航和列表/详情双栏，移动端使用顶部搜索和底部导航，详情使用独立页面。主要页面如下：
-
-| 页面 | 主要任务 | 必须覆盖的状态 |
-| --- | --- | --- |
-| 市集 | 切换在售/求购、搜索、筛选、进入详情 | 加载、空结果、失败、正常结果 |
-| 挂单详情 | 判断书籍、成色和价格是否合适并发起交易 | 自己的挂单、有效、失效、交易冲突 |
-| 发布 | 选择出售/求购并填写书籍与价格 | 校验失败、提交中、成功、服务失败 |
-| 撮合 | 查看建议价格并确认 | 待本人确认、待对方确认、已失效 |
-| 订单 | 查看交易对象并推进线下交付 | 待交付、已完成 |
-| 我的发布 | 查看和停用自己的挂单 | 有效、已撮合、已成交、已停用 |
-
-## 设计方向
-
-目标用户是在手机上快速找教材、比价和完成面交的学生。界面应像安静、可信的校园书市，优先呈现书籍、价格、成色和交易状态，不采用通用 SaaS 仪表盘或营销页布局。
-
-### 设计 token
-
-| 名称 | 色值 | 用途 |
-| --- | --- | --- |
-| Paper | `#F6F8F7` | 页面背景 |
-| Ink | `#17201B` | 主要文本 |
-| Campus green | `#176B4D` | 主操作与成功状态 |
-| Information blue | `#315DA8` | 求购与信息状态 |
-| Alert red | `#C44137` | 失败与危险操作 |
-| Divider | `#D8DEDA` | 分隔线与控件边界 |
-
-界面正文使用 `Noto Sans SC`，书名可使用 `Noto Serif SC`。字体文件只引入实际使用的字重。书籍封面和类似书架基线的排列是主要视觉特征，其余区域保持克制：不使用大幅 Hero、装饰性渐变、无意义标签或层层嵌套的卡片。动效只反馈用户触发的发布、确认和状态变化，并尊重 `prefers-reduced-motion`。
-
-## 技术方案
-
-### 当前基础
-
-- React 19
-- TypeScript 6
-- Vite 8
-- Bun 1.4
-- Oxlint
-
-### 计划依赖
-
-依赖在首次出现真实调用方的实施阶段加入并锁定版本，不为后续设想提前安装。
-
-运行时依赖：
-
-| 依赖 | 用途 | 引入阶段 |
-| --- | --- | --- |
-| `react-router-dom` | 页面路由、详情 URL 和导航状态 | 应用基础 |
-| `@tanstack/react-query` | 服务端状态、请求去重、失效刷新和 mutation 状态 | 应用基础 |
-| `openapi-fetch` | 使用生成的 OpenAPI 类型调用后端 | 后端联调 |
-| `lucide-react` | 一致且可访问的操作图标 | 应用基础 |
-
-开发依赖：
-
-| 依赖 | 用途 | 引入阶段 |
-| --- | --- | --- |
-| `openapi-typescript` | 从前端暂时维护的 OpenAPI 生成传输类型 | 契约冻结 |
-| `@redocly/cli` | 校验 OpenAPI 结构和约定 | 契约冻结 |
-| `vitest`、`jsdom` | 组件和 hooks 的快速行为测试 | 应用基础 |
-| `@testing-library/react`、`@testing-library/user-event`、`@testing-library/jest-dom` | 从用户行为验证界面 | 应用基础 |
-| `msw` | 在开发和测试中模拟同一套 HTTP 契约 | 应用基础 |
-| `@playwright/test` | 三条成交路径和响应式端到端验收 | 撮合与订单 |
-
-不在 MVP 中引入额外全局状态库、CSS 框架、表单框架或通用工具库。远端业务状态由 React Query 管理，短暂界面状态保留在组件附近，登录身份由应用级 Provider 提供。
+当前多数业务页面仍是骨架，MSW 只实现最小会话响应；OpenAPI 中存在的 operation 不代表页面或后端 handler 已经完成。产品结构与设计边界见[组件说明](docs/project-description.md)，后续页面和联调工作见[实施方案](docs/implementation_plan.md)。
 
 ## 项目结构
 
-目录按业务职责拆分。测试与规则所有者放在一起；只有被多个业务域实际复用的界面或格式化逻辑才进入 `shared`。
-
 ```text
-stu-trade-web/
-├── openapi/
-│   └── stu-trade.yaml          # 可执行 HTTP 结构契约
-├── e2e/                       # Playwright 三条核心路径
-├── public/                    # 无需构建处理的静态资源
-├── src/
-│   ├── api/
-│   │   ├── client.ts          # HTTP 客户端和边界错误转换
-│   │   └── generated/         # OpenAPI 生成类型，不手工编辑
-│   ├── app/
-│   │   ├── App.tsx            # 应用装配
-│   │   ├── providers.tsx      # 会话和请求客户端生命周期
-│   │   └── routes.tsx         # 顶层路由定义
-│   ├── assets/                # 由构建器处理的字体和图片
-│   ├── features/
-│   │   ├── auth/              # 登录、注册和会话恢复
-│   │   ├── listings/          # 市集、详情、发布和我的挂单
-│   │   ├── matches/           # 自动撮合列表与确认
-│   │   └── orders/            # 订单列表与交付状态
-│   ├── shared/
-│   │   ├── components/        # 已有多个调用方的基础控件
-│   │   └── format/            # 金额、日期和 ISBN 展示
-│   ├── styles/
-│   │   ├── tokens.css         # 颜色、字号、间距和层级
-│   │   └── global.css         # 重置和全局可访问性规则
-│   └── main.tsx               # 浏览器入口
-├── index.html
-└── package.json
+openapi/                    HTTP 结构契约
+src/api/generated/          OpenAPI 生成类型，不手工编辑
+src/app/                    应用装配、路由和壳层
+src/features/               按业务职责组织的页面与状态
+src/mocks/                  MSW browser/server 与 handlers
+src/shared/                 已有多个调用方的共享界面
+src/styles/                 全局样式和设计 token
+public/                     无需构建处理的静态资源
 ```
 
-每个 `features/<domain>` 目录可以包含该领域实际需要的 `api.ts`、组件、页面、类型和并置测试。不要创建只转发调用的 service 层，也不要建立没有明确调用方的通用 `utils` 目录。
-
-## HTTP 契约
-
-[`openapi/stu-trade.yaml`](openapi/stu-trade.yaml) 是当前机器可执行的 HTTP 结构契约，不能覆盖主仓库 `docs/` 定义的产品语义。`bun run api:generate` 将其生成到 `src/api/generated/schema.ts`；该文件提交到仓库且不得手工编辑，`bun run api:check` 会阻止 schema 与生成类型漂移。后端接受该契约后，若要迁移结构契约的权威位置，必须在同一变更中切换生成输入，不能维护两份 schema。
-
-浏览市集和挂单详情无需登录；发布、停用、撮合、成交和订单操作使用同源 HttpOnly、`SameSite=Lax` 会话 Cookie。生产环境的 Cookie 还必须设置 `Secure`，前端不接收或持久化令牌。建议接口如下：
-
-| 方法与路径 | 用途 |
-| --- | --- |
-| `POST /signup` | 以邮箱、昵称和密码注册，并创建会话 |
-| `POST /login` | 以邮箱和密码登录，并创建会话 |
-| `GET /sessions/current` | 恢复当前会话 |
-| `DELETE /sessions/current` | 退出 |
-| `GET/POST /sell-listings` | 浏览或发布出售挂单 |
-| `GET/DELETE /sell-listings/{id}` | 查看或停用出售挂单 |
-| `GET/POST /buy-requests` | 浏览或发布求购需求 |
-| `GET/DELETE /buy-requests/{id}` | 查看或停用求购需求 |
-| `GET /matches` | 查看自己的撮合建议 |
-| `POST /matches/{id}/confirm` | 确认自动撮合 |
-| `POST /matches/{id}/decline` | 拒绝自动撮合并释放挂单 |
-| `POST /buy-requests/{id}/accept` | 卖方主动接单 |
-| `POST /sell-listings/{id}/purchase` | 买方直接购买 |
-| `GET /orders` | 查看自己的订单 |
-| `POST /orders/{id}/confirm-completion` | 确认线下面交完成 |
-
-价格是 `{ amount, currency }`，其中 `amount` 为最小货币单位正整数，MVP 的 `currency` 固定为 `CNY`；时间使用带时区的 RFC 3339 字符串。所有列表使用 `limit` 和不透明 `cursor` 分页，返回 `{ items, nextCursor }`，空结果返回空数组。出售和求购挂单的状态为 `open`、`reserved`、`matched` 或 `withdrawn`；自动撮合的状态为 `pending`、`completed`、`declined` 或 `cancelled`；订单在双方均确认面交后从 `pending_delivery` 进入 `completed`。
-
-自动撮合按 ISBN 和价格，不把成色作为硬条件；自动撮合按卖方价格成交，卖方接单按买方报价成交，买方购买按卖方标价成交。快速路径只指定目标挂单，不要求发起方先发布反向挂单。MVP 不自动过期，挂单仅因预留、成交或用户停用而改变状态。前端只展示和提交状态，不复制 ISBN 一致、禁止自买自卖、挂单状态、重复确认幂等或同一挂单只能成交一次等后端规则；服务端通过稳定的 `application/problem+json` 响应表达 400、401、403、404、409 和 500。
-
-## 实施计划
-
-| 阶段 | 预计工作量 | 交付和退出条件 |
-| --- | ---: | --- |
-| 0. 契约冻结 | 1 人日 | 确定实体字段、状态机、错误响应和三条成交语义 |
-| 1. 应用基础 | 1–2 人日 | 路由、布局、设计 token、MSW 和测试框架可用 |
-| 2. 发布与市集 | 2 人日 | 能发布、浏览、搜索和停用两类挂单 |
-| 3. 撮合与订单 | 2–3 人日 | 三条成交路径在模拟 API 下完整运行 |
-| 4. 后端联调 | 2–3 人日 | 使用已生成类型接入真实 API，正确处理鉴权和冲突 |
-| 5. 验收与演示 | 1–2 人日 | E2E、响应式、可访问性和演示数据全部通过 |
-
-总量约为 8–11 人日。应用基础和后端契约实现可以并行，但真实联调必须等待 OpenAPI 和状态语义稳定。
-
-## MVP 验收
-
-- 当卖价等于买方预算时可以自动撮合。
-- ISBN 不同、自买自卖或失效挂单不能成交。
-- 自动撮合必须双方确认，并按卖方价格创建一次订单。
-- 重复确认不会重复创建订单。
-- 主动接单按买方报价成交，主动购买按卖方标价成交。
-- 两人同时购买同一挂单时只能有一人成功，失败方看到明确的冲突提示。
-- 订单可以从待交付推进到已完成。
-- 三条核心路径均有 Playwright E2E 覆盖。
-- 375 px 手机视口和桌面视口均无溢出、遮挡或不可操作控件。
-- 键盘焦点可见，颜色对比可读，减少动效设置得到尊重。
+HTTP 结构由本仓库的 OpenAPI 拥有；产品语义、宿主规则和跨组件边界由 StuTrade 主仓库文档拥有。前端不复制 ISBN、自买、状态转换、幂等或并发成交规则。
 
 ## 开发
 
@@ -222,9 +35,7 @@ bun install
 bun run dev
 ```
 
-开发服务器默认启用 MSW，以当前 OpenAPI 契约返回模拟响应。连接真实后端时设置
-`VITE_ENABLE_MSW=false`。`/api` 默认代理到 `http://127.0.0.1:8080`，可通过
-`VITE_BACKEND_URL` 覆盖。
+开发服务器默认启用 MSW。连接真实后端时设置 `VITE_ENABLE_MSW=false`；`/api` 默认代理到 `http://127.0.0.1:8080`，可通过 `VITE_BACKEND_URL` 覆盖。
 
 提交前运行：
 
@@ -232,9 +43,22 @@ bun run dev
 bun run check
 ```
 
-单独运行行为测试或监听测试：
+其他常用命令：
 
 ```bash
+bun run api:lint
+bun run api:check
 bun run test
 bun run test:watch
+bun run build
 ```
+
+## 文档索引
+
+- [组件说明](docs/project-description.md)
+- [实施方案](docs/implementation_plan.md)
+- [仓库协作规范](docs/governance/repository-workflow.md)
+- [责任与权威来源](docs/governance/ownership.md)
+- [实现规范](docs/governance/implementation.md)
+- [接口规范](docs/governance/interfaces.md)
+- [验证规范](docs/governance/verification.md)
