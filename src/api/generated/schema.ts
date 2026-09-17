@@ -337,6 +337,12 @@ export interface components {
             maximumPrice: components["schemas"]["Money"];
             note?: string;
         };
+        /** @description Actual book the seller will deliver; this does not create a public sale listing. */
+        AcceptBuyRequestInput: {
+            book: components["schemas"]["Book"];
+            condition: components["schemas"]["Condition"];
+            note?: string;
+        };
         SellListing: {
             id: components["schemas"]["Id"];
             owner: components["schemas"]["PublicUser"];
@@ -365,12 +371,15 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        /** @description Automatic matches reference both listings; direct trades reference only the real target listing. */
         Match: {
             id: components["schemas"]["Id"];
             source: components["schemas"]["MatchSource"];
             status: components["schemas"]["MatchStatus"];
-            sellListing: components["schemas"]["SellListing"];
-            buyRequest: components["schemas"]["BuyRequest"];
+            /** @description Required for automatic matches and direct purchases; absent for direct acceptances without a real sale listing. */
+            sellListing?: components["schemas"]["SellListing"];
+            /** @description Required for automatic matches and direct acceptances; absent for direct purchases without a real buy request. */
+            buyRequest?: components["schemas"]["BuyRequest"];
             agreedPrice: components["schemas"]["Money"];
             /** Format: date-time */
             sellerConfirmedAt: string | null;
@@ -381,7 +390,20 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
-        };
+        } & ({
+            /** @constant */
+            source: "automatic";
+            sellListing: components["schemas"]["SellListing"];
+            buyRequest: components["schemas"]["BuyRequest"];
+        } | {
+            /** @constant */
+            source: "direct_purchase";
+            sellListing: components["schemas"]["SellListing"];
+        } | {
+            /** @constant */
+            source: "direct_acceptance";
+            buyRequest: components["schemas"]["BuyRequest"];
+        });
         Order: {
             id: components["schemas"]["Id"];
             matchId: components["schemas"]["Id"];
@@ -888,7 +910,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptBuyRequestInput"];
+            };
+        };
         responses: {
             /** @description Direct acceptance completed */
             201: {
@@ -899,6 +925,7 @@ export interface operations {
                     "application/json": components["schemas"]["DirectTradeResult"];
                 };
             };
+            400: components["responses"]["ValidationProblem"];
             401: components["responses"]["UnauthenticatedProblem"];
             403: components["responses"]["ForbiddenProblem"];
             404: components["responses"]["NotFoundProblem"];

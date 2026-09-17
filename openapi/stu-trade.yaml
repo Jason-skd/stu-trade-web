@@ -1,13 +1,14 @@
 openapi: 3.1.1
 info:
   title: StuTrade MVP API
-  version: 0.1.0
+  version: 0.2.0
   license:
     name: UNLICENSED
     identifier: LicenseRef-StuTrade
   description: |
-    HTTP contract for the second-hand book MVP. The frontend repository owns
-    this contract until the host service accepts it as its source of truth.
+    HTTP structural contract for the second-hand book MVP. The frontend
+    repository owns this contract; the parent repository owns product semantics,
+    and the host reviews and implements pinned revisions.
 servers:
   - url: /api/v1
 security:
@@ -279,6 +280,12 @@ paths:
     post:
       operationId: acceptBuyRequest
       summary: Accept a buy request at its maximum price
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptBuyRequestInput'
       responses:
         '201':
           description: Direct acceptance completed
@@ -286,6 +293,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DirectTradeResult'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
         '401':
           $ref: '#/components/responses/UnauthenticatedProblem'
         '403':
@@ -677,6 +686,18 @@ components:
           $ref: '#/components/schemas/Money'
         note:
           type: string
+    AcceptBuyRequestInput:
+      type: object
+      additionalProperties: false
+      description: Actual book the seller will deliver; this does not create a public sale listing.
+      required: [book, condition]
+      properties:
+        book:
+          $ref: '#/components/schemas/Book'
+        condition:
+          $ref: '#/components/schemas/Condition'
+        note:
+          type: string
     SellListing:
       type: object
       additionalProperties: false
@@ -740,7 +761,8 @@ components:
     Match:
       type: object
       additionalProperties: false
-      required: [id, source, status, sellListing, buyRequest, agreedPrice, sellerConfirmedAt, buyerConfirmedAt, createdAt, updatedAt]
+      description: Automatic matches reference both listings; direct trades reference only the real target listing.
+      required: [id, source, status, agreedPrice, sellerConfirmedAt, buyerConfirmedAt, createdAt, updatedAt]
       properties:
         id:
           $ref: '#/components/schemas/Id'
@@ -749,8 +771,10 @@ components:
         status:
           $ref: '#/components/schemas/MatchStatus'
         sellListing:
+          description: Required for automatic matches and direct purchases; absent for direct acceptances without a real sale listing.
           $ref: '#/components/schemas/SellListing'
         buyRequest:
+          description: Required for automatic matches and direct acceptances; absent for direct purchases without a real buy request.
           $ref: '#/components/schemas/BuyRequest'
         agreedPrice:
           $ref: '#/components/schemas/Money'
@@ -769,6 +793,27 @@ components:
         updatedAt:
           type: string
           format: date-time
+      oneOf:
+        - properties:
+            source:
+              const: automatic
+            sellListing:
+              $ref: '#/components/schemas/SellListing'
+            buyRequest:
+              $ref: '#/components/schemas/BuyRequest'
+          required: [source, sellListing, buyRequest]
+        - properties:
+            source:
+              const: direct_purchase
+            sellListing:
+              $ref: '#/components/schemas/SellListing'
+          required: [source, sellListing]
+        - properties:
+            source:
+              const: direct_acceptance
+            buyRequest:
+              $ref: '#/components/schemas/BuyRequest'
+          required: [source, buyRequest]
     Order:
       type: object
       additionalProperties: false
