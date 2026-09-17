@@ -167,7 +167,12 @@ export function ProfilePage() {
   const [logoutError, setLogoutError] = useState(false)
   async function handleLogout() {
     setLogoutError(false)
-    try { await session.logout(); navigate('/') } catch { setLogoutError(true) }
+    try {
+      await session.logout()
+      navigate('/', { replace: true, flushSync: true })
+    } catch {
+      setLogoutError(true)
+    }
   }
   return <Page title="我的">
     {session.status === 'authenticated' && <>
