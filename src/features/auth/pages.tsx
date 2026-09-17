@@ -25,6 +25,21 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
     event.preventDefault(); if (submissionLocked.current) return
     submissionLocked.current = true
     const form = new FormData(event.currentTarget), email = String(form.get('email')).trim(), password = String(form.get('password')), nickname = String(form.get('nickname') ?? '').trim()
+    if (!email || !email.includes('@')) {
+      setError('请输入有效的邮箱地址。')
+      submissionLocked.current = false
+      return
+    }
+    if (mode === 'signup' && !nickname) {
+      setError('请输入昵称。')
+      submissionLocked.current = false
+      return
+    }
+    if (mode === 'signup' && password.length < 8) {
+      setError('密码至少需要 8 位。')
+      submissionLocked.current = false
+      return
+    }
     setError(''); setSubmitting(true)
     try {
       if (mode === 'login') await session.login({ email, password } satisfies LoginInput)

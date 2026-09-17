@@ -22,6 +22,31 @@ function renderRoute(path: string) {
 }
 
 describe('authentication', () => {
+  it('registers a user and enters the authenticated target', async () => {
+    const signupRequest = vi.fn()
+    server.use(
+      http.post('*/api/v1/signup', async ({ request }) => {
+        signupRequest(await request.json())
+        return HttpResponse.json(session, { status: 201 })
+      }),
+    )
+    renderRoute('/signup?returnTo=%2Fme')
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('邮箱'), 'lin@example.edu')
+    await user.type(screen.getByLabelText('昵称'), '林同学')
+    await user.type(screen.getByLabelText('密码'), 'secret123')
+    await user.click(screen.getByRole('button', { name: '注册并登录' }))
+
+    expect(await screen.findByRole('heading', { name: '我的' })).toBeInTheDocument()
+    expect(screen.getByText('林同学', { selector: 'p' })).toBeInTheDocument()
+    expect(signupRequest).toHaveBeenCalledWith({
+      email: 'lin@example.edu',
+      nickname: '林同学',
+      password: 'secret123',
+    })
+  })
+
   it('logs in once and returns to the protected target', async () => {
     const loginRequest = vi.fn()
     let completeLogin: (() => void) | undefined
@@ -59,6 +84,45 @@ describe('authentication', () => {
     expect(screen.getByRole('alert')).not.toHaveTextContent('Internal detail')
   })
 
+  it('maps invalid credentials without exposing the service detail', async () => {
+    server.use(
+      http.post('*/api/v1/login', () =>
+        HttpResponse.json(problem('invalid_credentials', 401), { status: 401 }),
+      ),
+    )
+    renderRoute('/login')
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('邮箱'), 'lin@example.edu')
+    await user.type(screen.getByLabelText('密码'), 'incorrect')
+    await user.click(screen.getByRole('button', { name: '登录' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '邮箱或密码不正确。',
+    )
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Internal detail')
+  })
+
+  it('uses browser validation before sending an invalid registration', async () => {
+    const signupRequest = vi.fn()
+    server.use(
+      http.post('*/api/v1/signup', () => {
+        signupRequest()
+        return HttpResponse.json(session, { status: 201 })
+      }),
+    )
+    renderRoute('/signup')
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('邮箱'), 'lin@example.edu')
+    await user.type(screen.getByLabelText('昵称'), '林同学')
+    await user.type(screen.getByLabelText('密码'), 'short')
+    await user.click(screen.getByRole('button', { name: '注册并登录' }))
+
+    expect(signupRequest).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('密码至少需要 8 位。')
+  })
+
   it('rejects an external return target', async () => {
     server.use(http.post('*/api/v1/login', () => HttpResponse.json(session)))
     const router = renderRoute('/login?returnTo=//evil.example')
@@ -87,5 +151,24 @@ describe('authentication', () => {
     await user.click(await screen.findByRole('button', { name: '退出登录' }))
     expect(await screen.findByRole('heading', { name: '市集' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '登录' })).toHaveAttribute('href', '/login')
+  })
+
+  it('keeps the identity when logout fails', async () => {
+    server.use(
+      http.get('*/api/v1/sessions/current', () => HttpResponse.json(session)),
+      http.delete(
+        '*/api/v1/sessions/current',
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+    )
+    renderRoute('/me')
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: '退出登录' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '退出失败，请稍后重试。',
+    )
+    expect(screen.getByText('林同学', { selector: 'p' })).toBeInTheDocument()
   })
 })
