@@ -566,7 +566,7 @@ export interface components {
     };
     requestBodies: never;
     headers: {
-        /** @description HttpOnly, SameSite=Lax session cookie. Production deployments also set Secure. */
+        /** @description Seven-day, non-sliding HttpOnly, SameSite=Lax session cookie with Max-Age=604800. Production deployments also set Secure. */
         SessionCookie: string;
         /** @description Expired HttpOnly session cookie. */
         ExpiredSessionCookie: string;

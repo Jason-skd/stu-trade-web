@@ -1,5 +1,6 @@
 import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 import { LoginPage, SignupPage } from '../features/auth/pages.tsx'
+import { ProtectedRoute } from '../features/auth/ProtectedRoute.tsx'
 import {
   MarketplacePage,
   ProfilePage,
@@ -16,10 +17,10 @@ export const appRoutes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <MarketplacePage /> },
-      { path: 'publish', element: <PublishPage /> },
-      { path: 'matches', element: <MatchesPage /> },
-      { path: 'orders', element: <OrdersPage /> },
-      { path: 'me', element: <ProfilePage /> },
+      { path: 'publish', element: <ProtectedRoute><PublishPage /></ProtectedRoute> },
+      { path: 'matches', element: <ProtectedRoute><MatchesPage /></ProtectedRoute> },
+      { path: 'orders', element: <ProtectedRoute><OrdersPage /></ProtectedRoute> },
+      { path: 'me', element: <ProtectedRoute><ProfilePage /></ProtectedRoute> },
       { path: 'login', element: <LoginPage /> },
       { path: 'signup', element: <SignupPage /> },
       { path: '*', element: <NotFoundPage /> },
