@@ -5,6 +5,8 @@ type Problem = components['schemas']['Problem']
 type Session = components['schemas']['Session']
 type LoginInput = components['schemas']['LoginInput']
 type SignupInput = components['schemas']['SignupInput']
+type SellListing = components['schemas']['SellListing']
+type BuyRequest = components['schemas']['BuyRequest']
 
 const unauthenticatedProblem = {
   type: '/problems/unauthenticated',
@@ -15,6 +17,34 @@ const unauthenticatedProblem = {
 } satisfies Problem
 
 let currentSession: Session | null = null
+
+const baseListing = {
+  owner: { id: 'user-2', nickname: '陈同学' },
+  book: { isbn: '9787040396638', title: '高等数学（第七版）', author: '同济大学数学系' },
+  condition: 'good' as SellListing['condition'],
+  status: 'open' as SellListing['status'],
+  availableActions: ['purchase'] as SellListing['availableActions'],
+  createdAt: '2026-09-16T08:00:00+08:00',
+  updatedAt: '2026-09-16T08:00:00+08:00',
+}
+
+export const sellListings: SellListing[] = [
+  { ...baseListing, id: 'sell-1', price: { amount: 3250, currency: 'CNY' }, note: '少量笔记，不影响阅读。' },
+  { ...baseListing, id: 'sell-2', owner: { id: 'user-1', nickname: '林同学' }, book: { isbn: '9787115428028', title: '计算机网络', author: '谢希仁' }, condition: 'like_new', price: { amount: 4200, currency: 'CNY' }, availableActions: ['withdraw'] },
+  { ...baseListing, id: 'sell-3', book: { isbn: '9787302517597', title: '数据结构', author: '严蔚敏' }, price: { amount: 2800, currency: 'CNY' }, status: 'withdrawn', availableActions: [] },
+]
+
+export const buyRequests: BuyRequest[] = [
+  { ...baseListing, id: 'buy-1', owner: { id: 'user-3', nickname: '周同学' }, book: { isbn: '9787111544937', title: '深入理解计算机系统', author: 'Randal E. Bryant' }, condition: 'fair', maximumPrice: { amount: 5000, currency: 'CNY' }, availableActions: ['accept'] },
+]
+
+function matchesSearch(item: SellListing | BuyRequest, request: Request) {
+  const url = new URL(request.url)
+  const q = url.searchParams.get('q')?.toLowerCase()
+  const condition = url.searchParams.get('condition')
+  return (!q || item.book.title.toLowerCase().includes(q) || item.book.isbn.includes(q)) &&
+    (!condition || item.condition === condition)
+}
 
 export const handlers = [
   http.post('*/api/v1/login', async ({ request }) => {
@@ -41,5 +71,19 @@ export const handlers = [
   http.delete('*/api/v1/sessions/current', () => {
     currentSession = null
     return new HttpResponse(null, { status: 204 })
+  }),
+  http.get('*/api/v1/sell-listings', ({ request }) =>
+    HttpResponse.json({ items: sellListings.filter((item) => matchesSearch(item, request)), nextCursor: null }),
+  ),
+  http.get('*/api/v1/buy-requests', ({ request }) =>
+    HttpResponse.json({ items: buyRequests.filter((item) => matchesSearch(item, request)), nextCursor: null }),
+  ),
+  http.get('*/api/v1/sell-listings/:id', ({ params }) => {
+    const item = sellListings.find((listing) => listing.id === params.id)
+    return item ? HttpResponse.json(item) : new HttpResponse(null, { status: 404 })
+  }),
+  http.get('*/api/v1/buy-requests/:id', ({ params }) => {
+    const item = buyRequests.find((listing) => listing.id === params.id)
+    return item ? HttpResponse.json(item) : new HttpResponse(null, { status: 404 })
   }),
 ]
