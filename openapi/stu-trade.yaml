@@ -1,0 +1,900 @@
+openapi: 3.1.1
+info:
+  title: StuTrade MVP API
+  version: 0.1.0
+  license:
+    name: UNLICENSED
+    identifier: LicenseRef-StuTrade
+  description: |
+    HTTP contract for the second-hand book MVP. The frontend repository owns
+    this contract until the host service accepts it as its source of truth.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /signup:
+    post:
+      operationId: signup
+      summary: Register a user and create a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupInput'
+      responses:
+        '201':
+          description: User registered and session created
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '409':
+          $ref: '#/components/responses/ConflictProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /login:
+    post:
+      operationId: login
+      summary: Create a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+      responses:
+        '200':
+          description: Session created
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /sessions/current:
+    get:
+      operationId: getCurrentSession
+      summary: Restore the current session
+      responses:
+        '200':
+          description: Current session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+    delete:
+      operationId: logout
+      summary: Delete the current session
+      security: []
+      responses:
+        '204':
+          description: Session deleted or already absent
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/ExpiredSessionCookie'
+        '403':
+          $ref: '#/components/responses/ForbiddenProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /sell-listings:
+    get:
+      operationId: listSellListings
+      summary: Browse sale listings
+      description: Public by default. `mine=true` requires an authenticated session.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Condition'
+        - $ref: '#/components/parameters/Mine'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          $ref: '#/components/responses/SellListingPage'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+    post:
+      operationId: createSellListing
+      summary: Publish a sale listing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSellListingInput'
+      responses:
+        '201':
+          description: Sale listing published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SellListing'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /sell-listings/{sellListingId}:
+    parameters:
+      - $ref: '#/components/parameters/SellListingId'
+    get:
+      operationId: getSellListing
+      summary: Get a sale listing
+      security: []
+      responses:
+        '200':
+          description: Sale listing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SellListing'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+    delete:
+      operationId: withdrawSellListing
+      summary: Withdraw an open sale listing
+      responses:
+        '204':
+          description: Listing withdrawn or already withdrawn by its owner
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '403':
+          $ref: '#/components/responses/ForbiddenProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '409':
+          $ref: '#/components/responses/ConflictProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /sell-listings/{sellListingId}/purchase:
+    parameters:
+      - $ref: '#/components/parameters/SellListingId'
+    post:
+      operationId: purchaseSellListing
+      summary: Buy a sale listing at its listed price
+      responses:
+        '201':
+          description: Direct purchase completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectTradeResult'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '403':
+          $ref: '#/components/responses/ForbiddenProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '409':
+          $ref: '#/components/responses/ConflictProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /buy-requests:
+    get:
+      operationId: listBuyRequests
+      summary: Browse buy requests
+      description: Public by default. `mine=true` requires an authenticated session.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Condition'
+        - $ref: '#/components/parameters/Mine'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          $ref: '#/components/responses/BuyRequestPage'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+    post:
+      operationId: createBuyRequest
+      summary: Publish a buy request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBuyRequestInput'
+      responses:
+        '201':
+          description: Buy request published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuyRequest'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /buy-requests/{buyRequestId}:
+    parameters:
+      - $ref: '#/components/parameters/BuyRequestId'
+    get:
+      operationId: getBuyRequest
+      summary: Get a buy request
+      security: []
+      responses:
+        '200':
+          description: Buy request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuyRequest'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+    delete:
+      operationId: withdrawBuyRequest
+      summary: Withdraw an open buy request
+      responses:
+        '204':
+          description: Request withdrawn or already withdrawn by its owner
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '403':
+          $ref: '#/components/responses/ForbiddenProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '409':
+          $ref: '#/components/responses/ConflictProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /buy-requests/{buyRequestId}/accept:
+    parameters:
+      - $ref: '#/components/parameters/BuyRequestId'
+    post:
+      operationId: acceptBuyRequest
+      summary: Accept a buy request at its maximum price
+      responses:
+        '201':
+          description: Direct acceptance completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectTradeResult'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '403':
+          $ref: '#/components/responses/ForbiddenProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '409':
+          $ref: '#/components/responses/ConflictProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /matches:
+    get:
+      operationId: listMatches
+      summary: List the current user's matches
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          $ref: '#/components/responses/MatchPage'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /matches/{matchId}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/MatchId'
+    post:
+      operationId: confirmMatch
+      summary: Confirm an automatic match
+      responses:
+        '200':
+          description: Authoritative match state after confirmation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '403':
+          $ref: '#/components/responses/ForbiddenProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '409':
+          $ref: '#/components/responses/ConflictProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /matches/{matchId}/decline:
+    parameters:
+      - $ref: '#/components/parameters/MatchId'
+    post:
+      operationId: declineMatch
+      summary: Decline an automatic match and release its listings
+      responses:
+        '200':
+          description: Authoritative declined match state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '403':
+          $ref: '#/components/responses/ForbiddenProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '409':
+          $ref: '#/components/responses/ConflictProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /orders:
+    get:
+      operationId: listOrders
+      summary: List the current user's orders
+      parameters:
+        - $ref: '#/components/parameters/OrderStatus'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          $ref: '#/components/responses/OrderPage'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+  /orders/{orderId}/confirm-completion:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    post:
+      operationId: confirmOrderCompletion
+      summary: Confirm an in-person delivery
+      responses:
+        '200':
+          description: Authoritative order state after completion confirmation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedProblem'
+        '403':
+          $ref: '#/components/responses/ForbiddenProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '409':
+          $ref: '#/components/responses/ConflictProblem'
+        '500':
+          $ref: '#/components/responses/InternalProblem'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: stu_trade_session
+      description: HttpOnly, SameSite=Lax session cookie. Production deployments also set Secure.
+  headers:
+    SessionCookie:
+      description: HttpOnly, SameSite=Lax session cookie. Production deployments also set Secure.
+      schema:
+        type: string
+    ExpiredSessionCookie:
+      description: Expired HttpOnly session cookie.
+      schema:
+        type: string
+  parameters:
+    SellListingId:
+      name: sellListingId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    BuyRequestId:
+      name: buyRequestId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    MatchId:
+      name: matchId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    Search:
+      name: q
+      in: query
+      description: Case-insensitive ISBN or title search.
+      schema:
+        type: string
+        minLength: 1
+    Condition:
+      name: condition
+      in: query
+      schema:
+        $ref: '#/components/schemas/Condition'
+    Mine:
+      name: mine
+      in: query
+      description: Include the authenticated user's listings in every state.
+      schema:
+        type: boolean
+        default: false
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque continuation cursor returned by a prior page.
+      schema:
+        type: string
+        minLength: 1
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    OrderStatus:
+      name: status
+      in: query
+      schema:
+        $ref: '#/components/schemas/OrderStatus'
+  responses:
+    SellListingPage:
+      description: Sale listing page
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SellListingPage'
+    BuyRequestPage:
+      description: Buy request page
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BuyRequestPage'
+    MatchPage:
+      description: Match page
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MatchPage'
+    OrderPage:
+      description: Order page
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OrderPage'
+    ValidationProblem:
+      description: Invalid request data
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnauthenticatedProblem:
+      description: Missing, expired, or invalid session
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ForbiddenProblem:
+      description: Authenticated user cannot perform this operation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFoundProblem:
+      description: Requested resource does not exist
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ConflictProblem:
+      description: Resource state prevents the requested operation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalProblem:
+      description: Unexpected server failure without internal details
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Id:
+      type: string
+      minLength: 1
+      description: Opaque identifier.
+    Currency:
+      type: string
+      const: CNY
+    Money:
+      type: object
+      additionalProperties: false
+      required: [amount, currency]
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+          description: Amount in the smallest currency unit.
+        currency:
+          $ref: '#/components/schemas/Currency'
+    Condition:
+      type: string
+      enum: [new, like_new, good, fair, poor]
+    ListingStatus:
+      type: string
+      enum: [open, reserved, matched, withdrawn]
+    MatchStatus:
+      type: string
+      enum: [pending, completed, declined, cancelled]
+    MatchSource:
+      type: string
+      enum: [automatic, direct_purchase, direct_acceptance]
+    OrderStatus:
+      type: string
+      enum: [pending_delivery, completed]
+    PublicUser:
+      type: object
+      additionalProperties: false
+      required: [id, nickname]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        nickname:
+          type: string
+          minLength: 1
+    OrderUser:
+      type: object
+      additionalProperties: false
+      required: [id, nickname, email]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        nickname:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+    Session:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/OrderUser'
+    SignupInput:
+      type: object
+      additionalProperties: false
+      required: [email, nickname, password]
+      properties:
+        email:
+          type: string
+          format: email
+        nickname:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          format: password
+          minLength: 8
+          writeOnly: true
+    LoginInput:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          writeOnly: true
+    Book:
+      type: object
+      additionalProperties: false
+      required: [isbn, title, author]
+      properties:
+        isbn:
+          type: string
+          minLength: 10
+        title:
+          type: string
+          minLength: 1
+        author:
+          type: string
+          minLength: 1
+        coverImageUrl:
+          type: string
+          format: uri
+    ListingAction:
+      type: string
+      enum: [withdraw, purchase, accept]
+    CreateSellListingInput:
+      type: object
+      additionalProperties: false
+      required: [book, condition, price]
+      properties:
+        book:
+          $ref: '#/components/schemas/Book'
+        condition:
+          $ref: '#/components/schemas/Condition'
+        price:
+          $ref: '#/components/schemas/Money'
+        note:
+          type: string
+    CreateBuyRequestInput:
+      type: object
+      additionalProperties: false
+      required: [book, condition, maximumPrice]
+      properties:
+        book:
+          $ref: '#/components/schemas/Book'
+        condition:
+          $ref: '#/components/schemas/Condition'
+        maximumPrice:
+          $ref: '#/components/schemas/Money'
+        note:
+          type: string
+    SellListing:
+      type: object
+      additionalProperties: false
+      required: [id, owner, book, condition, price, status, availableActions, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        owner:
+          $ref: '#/components/schemas/PublicUser'
+        book:
+          $ref: '#/components/schemas/Book'
+        condition:
+          $ref: '#/components/schemas/Condition'
+        price:
+          $ref: '#/components/schemas/Money'
+        note:
+          type: string
+        status:
+          $ref: '#/components/schemas/ListingStatus'
+        availableActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingAction'
+          uniqueItems: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    BuyRequest:
+      type: object
+      additionalProperties: false
+      required: [id, owner, book, condition, maximumPrice, status, availableActions, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        owner:
+          $ref: '#/components/schemas/PublicUser'
+        book:
+          $ref: '#/components/schemas/Book'
+        condition:
+          $ref: '#/components/schemas/Condition'
+        maximumPrice:
+          $ref: '#/components/schemas/Money'
+        note:
+          type: string
+        status:
+          $ref: '#/components/schemas/ListingStatus'
+        availableActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingAction'
+          uniqueItems: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Match:
+      type: object
+      additionalProperties: false
+      required: [id, source, status, sellListing, buyRequest, agreedPrice, sellerConfirmedAt, buyerConfirmedAt, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        source:
+          $ref: '#/components/schemas/MatchSource'
+        status:
+          $ref: '#/components/schemas/MatchStatus'
+        sellListing:
+          $ref: '#/components/schemas/SellListing'
+        buyRequest:
+          $ref: '#/components/schemas/BuyRequest'
+        agreedPrice:
+          $ref: '#/components/schemas/Money'
+        sellerConfirmedAt:
+          type: [string, 'null']
+          format: date-time
+        buyerConfirmedAt:
+          type: [string, 'null']
+          format: date-time
+        orderId:
+          type: string
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Order:
+      type: object
+      additionalProperties: false
+      required: [id, matchId, book, seller, buyer, agreedPrice, status, sellerConfirmedCompletionAt, buyerConfirmedCompletionAt, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        matchId:
+          $ref: '#/components/schemas/Id'
+        book:
+          $ref: '#/components/schemas/Book'
+        seller:
+          $ref: '#/components/schemas/OrderUser'
+        buyer:
+          $ref: '#/components/schemas/OrderUser'
+        agreedPrice:
+          $ref: '#/components/schemas/Money'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        sellerConfirmedCompletionAt:
+          type: [string, 'null']
+          format: date-time
+        buyerConfirmedCompletionAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    DirectTradeResult:
+      type: object
+      additionalProperties: false
+      required: [match, order]
+      properties:
+        match:
+          $ref: '#/components/schemas/Match'
+        order:
+          $ref: '#/components/schemas/Order'
+    SellListingPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SellListing'
+        nextCursor:
+          type: [string, 'null']
+    BuyRequestPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BuyRequest'
+        nextCursor:
+          type: [string, 'null']
+    MatchPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Match'
+        nextCursor:
+          type: [string, 'null']
+    OrderPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        nextCursor:
+          type: [string, 'null']
+    FieldProblem:
+      type: object
+      additionalProperties: false
+      required: [field, code, detail]
+      properties:
+        field:
+          type: string
+        code:
+          type: string
+        detail:
+          type: string
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, detail]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          type: string
+          enum:
+            - validation_failed
+            - invalid_credentials
+            - unauthenticated
+            - forbidden
+            - not_found
+            - email_taken
+            - listing_unavailable
+            - match_not_pending
+            - order_not_pending_delivery
+            - conflict
+            - internal_error
+        detail:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldProblem'
