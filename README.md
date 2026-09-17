@@ -5,13 +5,13 @@ StuTrade 的 React + TypeScript 前端，使用 Vite 构建。
 ## 开发
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 提交前运行：
 
 ```bash
-npm run lint
-npm run build
+bun run lint
+bun run build
 ```
