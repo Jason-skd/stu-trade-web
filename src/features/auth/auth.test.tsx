@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
@@ -58,6 +58,9 @@ describe('authentication', () => {
     }))
     const router = renderRoute('/orders?filter=open#latest')
     const user = userEvent.setup()
+    expect(
+      await screen.findByText('请先登录，随后将返回刚才访问的页面。'),
+    ).toHaveAttribute('role', 'status')
     await user.type(await screen.findByLabelText('邮箱'), 'lin@example.edu')
     await user.type(screen.getByLabelText('密码'), 'secret123')
     const submission = user.dblClick(screen.getByRole('button', { name: '登录' }))
@@ -121,6 +124,27 @@ describe('authentication', () => {
 
     expect(signupRequest).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toHaveTextContent('密码至少需要 8 位。')
+  })
+
+  it('rejects credentials outside the contract limits', async () => {
+    const loginRequest = vi.fn()
+    server.use(
+      http.post('*/api/v1/login', () => {
+        loginRequest()
+        return HttpResponse.json(session)
+      }),
+    )
+    renderRoute('/login')
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('邮箱'), 'lin@example.edu')
+    fireEvent.change(screen.getByLabelText('密码'), {
+      target: { value: 'x'.repeat(129) },
+    })
+    await user.click(screen.getByRole('button', { name: '登录' }))
+
+    expect(loginRequest).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('密码不能超过 128 位。')
   })
 
   it('rejects an external return target', async () => {

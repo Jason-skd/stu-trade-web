@@ -413,10 +413,10 @@ components:
       type: apiKey
       in: cookie
       name: stu_trade_session
-      description: HttpOnly, SameSite=Lax session cookie. Production deployments also set Secure.
+      description: Seven-day, non-sliding HttpOnly, SameSite=Lax session cookie. Production deployments also set Secure.
   headers:
     SessionCookie:
-      description: HttpOnly, SameSite=Lax session cookie. Production deployments also set Secure.
+      description: Seven-day, non-sliding HttpOnly, SameSite=Lax session cookie with Max-Age=604800. Production deployments also set Secure.
       schema:
         type: string
     ExpiredSessionCookie:
@@ -592,6 +592,7 @@ components:
         nickname:
           type: string
           minLength: 1
+          maxLength: 50
     OrderUser:
       type: object
       additionalProperties: false
@@ -602,9 +603,11 @@ components:
         nickname:
           type: string
           minLength: 1
+          maxLength: 50
         email:
           type: string
           format: email
+          maxLength: 254
     Session:
       type: object
       additionalProperties: false
@@ -620,13 +623,16 @@ components:
         email:
           type: string
           format: email
+          maxLength: 254
         nickname:
           type: string
           minLength: 1
+          maxLength: 50
         password:
           type: string
           format: password
           minLength: 8
+          maxLength: 128
           writeOnly: true
     LoginInput:
       type: object
@@ -636,9 +642,12 @@ components:
         email:
           type: string
           format: email
+          maxLength: 254
         password:
           type: string
           format: password
+          minLength: 8
+          maxLength: 128
           writeOnly: true
     Book:
       type: object

@@ -35,8 +35,23 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
       submissionLocked.current = false
       return
     }
-    if (mode === 'signup' && password.length < 8) {
+    if (email.length > 254) {
+      setError('邮箱地址不能超过 254 个字符。')
+      submissionLocked.current = false
+      return
+    }
+    if (mode === 'signup' && nickname.length > 50) {
+      setError('昵称不能超过 50 个字符。')
+      submissionLocked.current = false
+      return
+    }
+    if (password.length < 8) {
       setError('密码至少需要 8 位。')
+      submissionLocked.current = false
+      return
+    }
+    if (password.length > 128) {
+      setError('密码不能超过 128 位。')
       submissionLocked.current = false
       return
     }
@@ -54,11 +69,15 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   }
   const other = `${mode === 'login' ? '/signup' : '/login'}${target === '/' ? '' : `?returnTo=${encodeURIComponent(target)}`}`
   return <Page title={mode === 'login' ? '登录' : '注册'}><div className="auth-layout">
-    <p className="auth-intro">用校园身份继续发布、撮合与面交。</p>
+    <p className="auth-intro" role={target === '/' ? undefined : 'status'}>
+      {target === '/'
+        ? '用校园身份继续发布、撮合与面交。'
+        : '请先登录，随后将返回刚才访问的页面。'}
+    </p>
     <form className="auth-form" onSubmit={submit}>
-      <label>邮箱<input name="email" type="email" autoComplete="email" required /></label>
-      {mode === 'signup' && <label>昵称<input name="nickname" autoComplete="nickname" required /></label>}
-      <label>密码<input name="password" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'signup' ? 8 : undefined} required /></label>
+      <label>邮箱<input name="email" type="email" autoComplete="email" maxLength={254} required /></label>
+      {mode === 'signup' && <label>昵称<input name="nickname" autoComplete="nickname" maxLength={50} required /></label>}
+      <label>密码<input name="password" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8} maxLength={128} required /></label>
       {error && <p className="auth-error" role="alert">{error}</p>}
       <button disabled={submitting} type="submit">{submitting ? '处理中…' : mode === 'login' ? '登录' : '注册并登录'}</button>
     </form>
