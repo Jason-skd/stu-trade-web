@@ -10,7 +10,7 @@ MVP 必须让两名学生完整完成以下三条成交路径：
 2. **卖方接单**：卖方浏览求购需求，按买方报价直接接单。
 3. **买方购买**：买方浏览在售书籍，按卖方标价直接购买。
 
-成交后，双方能够查看订单并完成线下交付。公开挂单在有效期内视为可直接接受的要约，因此主动接单和主动购买不重复要求双方确认；自动撮合产生的建议必须由双方确认后才创建订单。
+成交后，双方能够查看订单并完成线下交付。公开的开放挂单视为可直接接受的要约，因此主动接单和主动购买不重复要求双方确认；自动撮合产生的建议必须由双方确认后才创建订单。
 
 ### 包含范围
 
@@ -113,7 +113,8 @@ StuTrade
 
 | 依赖 | 用途 | 引入阶段 |
 | --- | --- | --- |
-| `openapi-typescript` | 从后端 OpenAPI 生成唯一来源的传输类型 | 后端联调 |
+| `openapi-typescript` | 从前端暂时维护的 OpenAPI 生成传输类型 | 契约冻结 |
+| `@redocly/cli` | 校验 OpenAPI 结构和约定 | 契约冻结 |
 | `vitest`、`jsdom` | 组件和 hooks 的快速行为测试 | 应用基础 |
 | `@testing-library/react`、`@testing-library/user-event`、`@testing-library/jest-dom` | 从用户行为验证界面 | 应用基础 |
 | `msw` | 在开发和测试中模拟同一套 HTTP 契约 | 应用基础 |
@@ -127,6 +128,8 @@ StuTrade
 
 ```text
 stu-trade-web/
+├── openapi/
+│   └── stu-trade.yaml          # 暂时的 HTTP 契约权威来源
 ├── e2e/                       # Playwright 三条核心路径
 ├── public/                    # 无需构建处理的静态资源
 ├── src/
@@ -156,27 +159,33 @@ stu-trade-web/
 
 每个 `features/<domain>` 目录可以包含该领域实际需要的 `api.ts`、组件、页面、类型和并置测试。不要创建只转发调用的 service 层，也不要建立没有明确调用方的通用 `utils` 目录。
 
-## 后端契约
+## HTTP 契约
 
-后端维护 OpenAPI 作为 HTTP 结构的权威来源；前端通过 `openapi-typescript` 生成类型，不手工复制 DTO。建议的最小接口如下，最终路径和字段在实现前由前后端共同冻结：
+在宿主后端确认前，前端仓库的 [`openapi/stu-trade.yaml`](openapi/stu-trade.yaml) 是 MVP 的唯一可执行 HTTP 契约来源。`bun run api:generate` 将其生成到 `src/api/generated/schema.ts`；该文件提交到仓库且不得手工编辑，`bun run api:check` 会阻止 schema 与生成类型漂移。后端接受该契约后，若要迁移权威来源，必须在同一变更中切换生成输入，不能维护两份 schema。
+
+浏览市集和挂单详情无需登录；发布、停用、撮合、成交和订单操作使用同源 HttpOnly、`SameSite=Lax` 会话 Cookie。生产环境的 Cookie 还必须设置 `Secure`，前端不接收或持久化令牌。建议接口如下：
 
 | 方法与路径 | 用途 |
 | --- | --- |
-| `POST /users` | 注册用户 |
-| `POST /sessions` | 登录 |
+| `POST /signup` | 以邮箱、昵称和密码注册，并创建会话 |
+| `POST /login` | 以邮箱和密码登录，并创建会话 |
+| `GET /sessions/current` | 恢复当前会话 |
 | `DELETE /sessions/current` | 退出 |
 | `GET/POST /sell-listings` | 浏览或发布出售挂单 |
+| `GET/DELETE /sell-listings/{id}` | 查看或停用出售挂单 |
 | `GET/POST /buy-requests` | 浏览或发布求购需求 |
+| `GET/DELETE /buy-requests/{id}` | 查看或停用求购需求 |
 | `GET /matches` | 查看自己的撮合建议 |
 | `POST /matches/{id}/confirm` | 确认自动撮合 |
+| `POST /matches/{id}/decline` | 拒绝自动撮合并释放挂单 |
 | `POST /buy-requests/{id}/accept` | 卖方主动接单 |
 | `POST /sell-listings/{id}/purchase` | 买方直接购买 |
 | `GET /orders` | 查看自己的订单 |
-| `POST /orders/{id}/complete` | 完成交付 |
+| `POST /orders/{id}/confirm-completion` | 确认线下面交完成 |
 
-价格使用最小货币单位的整数和显式币种，时间使用带时区的 RFC 3339 字符串。列表返回空数组而不是 `null`。契约必须明确挂单、撮合和订单状态，以及校验失败、未认证、无权限、不存在和并发冲突的响应。
+价格是 `{ amount, currency }`，其中 `amount` 为最小货币单位正整数，MVP 的 `currency` 固定为 `CNY`；时间使用带时区的 RFC 3339 字符串。所有列表使用 `limit` 和不透明 `cursor` 分页，返回 `{ items, nextCursor }`，空结果返回空数组。出售和求购挂单的状态为 `open`、`reserved`、`matched` 或 `withdrawn`；自动撮合的状态为 `pending`、`completed`、`declined` 或 `cancelled`；订单在双方均确认面交后从 `pending_delivery` 进入 `completed`。
 
-前端只展示和提交状态，不复制以下后端规则：ISBN 相同、卖价不高于买方预算、禁止自买自卖、挂单仍然有效、重复确认幂等，以及同一挂单只能成交一次。
+自动撮合按 ISBN 和价格，不把成色作为硬条件；自动撮合按卖方价格成交，卖方接单按买方报价成交，买方购买按卖方标价成交。快速路径只指定目标挂单，不要求发起方先发布反向挂单。MVP 不自动过期，挂单仅因预留、成交或用户停用而改变状态。前端只展示和提交状态，不复制 ISBN 一致、禁止自买自卖、挂单状态、重复确认幂等或同一挂单只能成交一次等后端规则；服务端通过稳定的 `application/problem+json` 响应表达 400、401、403、404、409 和 500。
 
 ## 实施计划
 
@@ -186,7 +195,7 @@ stu-trade-web/
 | 1. 应用基础 | 1–2 人日 | 路由、布局、设计 token、MSW 和测试框架可用 |
 | 2. 发布与市集 | 2 人日 | 能发布、浏览、搜索和停用两类挂单 |
 | 3. 撮合与订单 | 2–3 人日 | 三条成交路径在模拟 API 下完整运行 |
-| 4. 后端联调 | 2–3 人日 | 使用生成类型接入真实 API，正确处理鉴权和冲突 |
+| 4. 后端联调 | 2–3 人日 | 使用已生成类型接入真实 API，正确处理鉴权和冲突 |
 | 5. 验收与演示 | 1–2 人日 | E2E、响应式、可访问性和演示数据全部通过 |
 
 总量约为 8–11 人日。应用基础和后端契约实现可以并行，但真实联调必须等待 OpenAPI 和状态语义稳定。
@@ -214,8 +223,7 @@ bun run dev
 提交前运行：
 
 ```bash
-bun run lint
-bun run build
+bun run check
 ```
 
 测试脚本将在应用基础阶段随对应测试依赖一起加入。
