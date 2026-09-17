@@ -1,0 +1,8 @@
+.auth-layout { max-width: 28rem; margin: var(--space-8) auto 0; }
+.auth-intro { color: var(--color-muted); line-height: 1.7; }
+.auth-form { display: grid; gap: var(--space-5); margin-top: var(--space-6); padding: var(--space-6); border: 1px solid var(--color-divider); border-top: 4px solid var(--color-campus-green); background: var(--color-surface); }
+.auth-form label { display: grid; gap: var(--space-2); font-weight: 600; }
+.auth-form input { min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--color-divider); border-radius: var(--radius-sm); color: var(--color-ink); background: var(--color-surface); }
+.auth-form button { min-height: 44px; border: 0; border-radius: var(--radius-sm); color: var(--color-surface); background: var(--color-campus-green); font-weight: 700; cursor: pointer; }
+.auth-form button:disabled { cursor: wait; opacity: .65; }
+.auth-error { margin: 0; color: var(--color-alert-red); }

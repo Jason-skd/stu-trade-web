@@ -40,9 +40,12 @@ describe('application shell', () => {
     await user.click(ordersLink)
 
     expect(
-      screen.getByRole('heading', { level: 1, name: '订单' }),
+      await screen.findByRole('heading', { level: 1, name: '登录' }),
     ).toBeInTheDocument()
-    expect(ordersLink).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: '注册' })).toHaveAttribute(
+      'href',
+      '/signup?returnTo=%2Forders',
+    )
   })
 
   it('exposes authentication routes and a not-found route', () => {
