@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { BookOpen, ImageOff, Search } from 'lucide-react'
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   getMarketplaceListing,
   listMarketplace,
@@ -46,11 +46,12 @@ function ListingCover({ listing }: { listing: MarketplaceListing }) {
 
 function ListingRow({ kind, listing }: { kind: MarketplaceKind; listing: MarketplaceListing }) {
   const resource = kind === 'sell' ? 'sell-listings' : 'buy-requests'
+  const { search } = useLocation()
   return (
     <li className="listing-row">
       <ListingCover listing={listing} />
       <div className="listing-row__book">
-        <Link className="listing-row__title" to={`/${resource}/${listing.id}`}>{listing.book.title}</Link>
+        <Link className="listing-row__title" to={{ pathname: `/${resource}/${listing.id}`, search }}>{listing.book.title}</Link>
         <span>{listing.book.author}</span>
         <span>ISBN {listing.book.isbn}</span>
       </div>
@@ -131,9 +132,10 @@ export function MarketplacePage() {
 
 export function MarketplaceDetailPage({ kind }: { kind: MarketplaceKind }) {
   const { listingId = '' } = useParams()
+  const { search } = useLocation()
   const session = useSession()
   const detailQuery = useQuery({ queryKey: ['marketplace-detail', kind, listingId], queryFn: () => getMarketplaceListing(kind, listingId) })
-  const back = kind === 'buy' ? '/?type=buy' : '/'
+  const back = { pathname: '/', search }
   if (detailQuery.isPending) return <DetailFrame><Status title="正在载入详情" detail="请稍候。" /></DetailFrame>
   if (detailQuery.isError) return <DetailFrame><Status title="详情无法载入" detail="挂单可能已删除，或网络暂时不可用。" action={<span className="status-actions"><button type="button" onClick={() => detailQuery.refetch()}>重试</button><Link to={back}>返回市集</Link></span>} /></DetailFrame>
   const listing = detailQuery.data

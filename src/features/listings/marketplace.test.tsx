@@ -108,4 +108,17 @@ describe('marketplace', () => {
     renderRoute('/sell-listings/sell-2')
     expect(await screen.findByText('这是你的挂单')).toBeInTheDocument()
   })
+
+  it('preserves marketplace filters through detail navigation', async () => {
+    const user = userEvent.setup()
+    const router = renderRoute('/?type=buy&condition=fair')
+
+    await user.click(await screen.findByRole('link', { name: '深入理解计算机系统' }))
+    expect(router.state.location.pathname).toBe('/buy-requests/buy-1')
+    expect(router.state.location.search).toBe('?type=buy&condition=fair')
+    expect(await screen.findByRole('link', { name: '返回市集' })).toHaveAttribute(
+      'href',
+      '/?type=buy&condition=fair',
+    )
+  })
 })
