@@ -1,32 +1,18 @@
 import type { components } from './generated/schema.ts'
+import { apiProblemFrom } from './problem.ts'
 
+// === define session contracts ===
+
+/** 当前浏览器会话。 */
 export type Session = components['schemas']['Session']
+
+/** 登录请求输入。 */
 export type LoginInput = components['schemas']['LoginInput']
+
+/** 注册请求输入。 */
 export type SignupInput = components['schemas']['SignupInput']
-export type Problem = components['schemas']['Problem']
 
-export class ApiProblem extends Error {
-  readonly problem: Problem
-
-  constructor(problem: Problem) {
-    super(problem.code)
-    this.problem = problem
-  }
-}
-
-async function problemFrom(response: Response): Promise<ApiProblem> {
-  try {
-    return new ApiProblem((await response.json()) as Problem)
-  } catch {
-    return new ApiProblem({
-      type: '/problems/internal-error',
-      title: 'Request failed',
-      status: response.status,
-      code: 'internal_error',
-      detail: 'The request could not be completed.',
-    })
-  }
-}
+// === submit session credentials ===
 
 async function requestSession(path: string, body: LoginInput | SignupInput) {
   const response = await fetch(
@@ -41,13 +27,19 @@ async function requestSession(path: string, body: LoginInput | SignupInput) {
       body: JSON.stringify(body),
     },
   )
-  if (!response.ok) throw await problemFrom(response)
+  if (!response.ok) throw await apiProblemFrom(response)
   return (await response.json()) as Session
 }
 
+/** 使用邮箱和密码创建当前会话。 */
 export const login = (input: LoginInput) => requestSession('login', input)
+
+/** 注册用户并创建当前会话。 */
 export const signup = (input: SignupInput) => requestSession('signup', input)
 
+// === manage current session ===
+
+/** 删除当前浏览器会话。 */
 export async function logout() {
   const response = await fetch(
     new URL('/api/v1/sessions/current', window.location.origin),
@@ -57,9 +49,10 @@ export async function logout() {
       headers: { Accept: 'application/problem+json' },
     },
   )
-  if (!response.ok) throw await problemFrom(response)
+  if (!response.ok) throw await apiProblemFrom(response)
 }
 
+/** 恢复当前会话；未登录时返回 null。 */
 export async function getCurrentSession(): Promise<Session | null> {
   const url = new URL('/api/v1/sessions/current', window.location.origin)
   const response = await fetch(url, {
@@ -72,7 +65,7 @@ export async function getCurrentSession(): Promise<Session | null> {
   }
 
   if (!response.ok) {
-    throw new Error(`Session request failed with status ${response.status}`)
+    throw await apiProblemFrom(response)
   }
 
   return (await response.json()) as Session
