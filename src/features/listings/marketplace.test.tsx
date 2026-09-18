@@ -9,6 +9,8 @@ import { AppProviders } from '../../app/providers.tsx'
 import { appRoutes } from '../../app/routes.tsx'
 import { server } from '../../mocks/server.ts'
 
+// === render marketplace route ===
+
 function renderRoute(path = '/') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -22,11 +24,15 @@ function renderRoute(path = '/') {
   return router
 }
 
+// === verify marketplace behavior ===
+
 describe('marketplace', () => {
   it('normalizes unsupported URL filters', async () => {
     const router = renderRoute('/?type=unknown&condition=broken&unused=value')
 
-    expect(await screen.findByRole('link', { name: '高等数学（第七版）' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('link', { name: '高等数学（第七版）' }),
+    ).toBeInTheDocument()
     expect(router.state.location.search).toBe('')
   })
 
@@ -39,7 +45,9 @@ describe('marketplace', () => {
 
     await user.click(screen.getByRole('button', { name: '求购需求' }))
     expect(await screen.findByRole('heading', { name: '没有找到挂单' })).toBeInTheDocument()
-    expect(router.state.location.search).toBe('?type=buy&q=%E8%AE%A1%E7%AE%97%E6%9C%BA&condition=like_new')
+    expect(router.state.location.search).toBe(
+      '?type=buy&q=%E8%AE%A1%E7%AE%97%E6%9C%BA&condition=like_new',
+    )
   })
 
   it('submits search filters and can recover from a failed request', async () => {
@@ -55,7 +63,9 @@ describe('marketplace', () => {
     const user = userEvent.setup()
     const router = renderRoute()
 
-    expect(await screen.findByRole('heading', { name: '市集暂时无法载入' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: '市集暂时无法载入' }),
+    ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '重新加载' }))
     expect(await screen.findByRole('heading', { name: '没有找到挂单' })).toBeInTheDocument()
 
@@ -71,7 +81,11 @@ describe('marketplace', () => {
         const item = {
           id: cursor ? 'sell-next' : 'sell-first',
           owner: { id: 'other', nickname: '陈同学' },
-          book: { isbn: cursor ? '9787302517597' : '9787040396638', title: cursor ? '数据结构' : '高等数学', author: '教材编写组' },
+          book: {
+            isbn: cursor ? '9787302517597' : '9787040396638',
+            title: cursor ? '数据结构' : '高等数学',
+            author: '教材编写组',
+          },
           condition: 'good',
           price: { amount: 3000, currency: 'CNY' },
           status: 'open',
@@ -99,10 +113,27 @@ describe('marketplace', () => {
     expect(screen.getByRole('link', { name: '返回市集' })).toHaveAttribute('href', '/')
   })
 
+  it('distinguishes a missing listing from a service failure', async () => {
+    renderRoute('/sell-listings/missing')
+
+    expect(
+      await screen.findByRole('heading', { name: '挂单不存在' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('挂单可能已删除，或网络暂时不可用。'),
+    ).not.toBeInTheDocument()
+  })
+
   it('identifies the current user own listing', async () => {
     server.use(
       http.get('*/api/v1/sessions/current', () =>
-        HttpResponse.json({ user: { id: 'user-1', nickname: '林同学', email: 'lin@example.edu' } }),
+        HttpResponse.json({
+          user: {
+            id: 'user-1',
+            nickname: '林同学',
+            email: 'lin@example.edu',
+          },
+        }),
       ),
     )
     renderRoute('/sell-listings/sell-2')

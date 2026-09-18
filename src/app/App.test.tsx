@@ -9,6 +9,8 @@ import { server } from '../mocks/server.ts'
 import { AppProviders } from './providers.tsx'
 import { appRoutes } from './routes.tsx'
 
+// === render application route ===
+
 function renderRoute(path = '/') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -21,6 +23,8 @@ function renderRoute(path = '/') {
     </AppProviders>,
   )
 }
+
+// === verify application shell ===
 
 describe('application shell', () => {
   it('navigates between the stable primary routes', async () => {

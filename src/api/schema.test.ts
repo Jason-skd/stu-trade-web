@@ -2,11 +2,15 @@ import { describe, expectTypeOf, it } from 'vitest'
 
 import type { components, operations } from './generated/schema'
 
+// === define transport assertions ===
+
 type Match = components['schemas']['Match']
 type AutomaticMatch = Extract<Match, { source: 'automatic' }>
 type DirectPurchaseMatch = Extract<Match, { source: 'direct_purchase' }>
 type DirectAcceptanceMatch = Extract<Match, { source: 'direct_acceptance' }>
 type IsOptional<T, K extends keyof T> = {} extends Pick<T, K> ? true : false
+
+// === verify openapi transport types ===
 
 describe('OpenAPI transport types', () => {
   it('requires the delivered book when accepting a buy request', () => {
