@@ -8,11 +8,11 @@ export type MarketplaceKind = 'sell' | 'buy'
 
 /** OpenAPI 定义的书籍成色。 */
 export type Condition = components['schemas']['Condition']
-export type SellListing = components['schemas']['SellListing']
-export type BuyRequest = components['schemas']['BuyRequest']
-export type CreateSellListingInput =
+type SellListing = components['schemas']['SellListing']
+type BuyRequest = components['schemas']['BuyRequest']
+type CreateSellListingInput =
   components['schemas']['CreateSellListingInput']
-export type CreateBuyRequestInput =
+type CreateBuyRequestInput =
   components['schemas']['CreateBuyRequestInput']
 
 /** 市集可展示的出售或求购挂单。 */
