@@ -4,6 +4,8 @@ import { App } from './app/App.tsx'
 import './styles/tokens.css'
 import './styles/global.css'
 
+// === start development mocking ===
+
 if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_MSW !== 'false') {
   try {
     const { startMocking } = await import('./mocks/browser.ts')
@@ -12,6 +14,8 @@ if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_MSW !== 'false') {
     console.error('Failed to start the mock service worker.', error)
   }
 }
+
+// === render application root ===
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

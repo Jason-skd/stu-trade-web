@@ -2,11 +2,14 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import './page.css'
 
+// === define page presentation ===
+
 type PageProps = {
   children?: ReactNode
   title: string
 }
 
+/** 渲染带统一标题装饰的页面容器。 */
 export function Page({ children, title }: PageProps) {
   return (
     <section className="page">
@@ -23,6 +26,9 @@ export function Page({ children, title }: PageProps) {
   )
 }
 
+// === render missing page ===
+
+/** 渲染未知路由的返回入口。 */
 export function NotFoundPage() {
   return (
     <Page title="页面不存在">

@@ -6,8 +6,9 @@ import {
 } from '../../api/session.ts'
 import { SessionContext, type SessionContextValue } from './session-context.ts'
 
-export type { Session } from '../../api/session.ts'
+// === provide current session ===
 
+/** 通过 React Query 恢复和维护当前会话。 */
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const sessionQuery = useQuery({ queryKey: ['session'], queryFn: getCurrentSession })
@@ -26,8 +27,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await logout()
       queryClient.setQueryData(['session'], null)
     },
-    retry: () => { void sessionQuery.refetch() },
+    retry: () => {
+      void sessionQuery.refetch()
+    },
   }
+
+  // === derive session state ===
+
   const state = sessionQuery.isPending
     ? { status: 'loading', session: null, error: null } as const
     : sessionQuery.isError

@@ -11,6 +11,8 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useSession } from '../../features/auth/session-context.ts'
 import './app-shell.css'
 
+// === define primary navigation ===
+
 type NavigationItem = {
   label: string
   path: string
@@ -25,6 +27,8 @@ const navigation: NavigationItem[] = [
   { label: '订单', path: '/orders', icon: ClipboardList },
   { label: '我的', path: '/me', icon: UserRound },
 ]
+
+// === render navigation links ===
 
 function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
   return navigation.map(({ label, path, icon: Icon, end }) => (
@@ -42,6 +46,9 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
   ))
 }
 
+// === render application shell ===
+
+/** 渲染响应式主导航和当前路由内容。 */
 export function AppShell() {
   const session = useSession()
   const accountLabel =

@@ -1,13 +1,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { BookOpen, ImageOff, Search } from 'lucide-react'
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
-import {
-  Link,
-  useLocation,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from 'react-router-dom'
+import { type FormEvent, type ReactNode, useEffect } from 'react'
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import {
   getMarketplaceListing,
   listMarketplace,
@@ -395,35 +389,4 @@ function DetailFrame({ children }: { children: ReactNode }) {
 /** 渲染尚待实现的发布入口。 */
 export function PublishPage() {
   return <Page title="发布" />
-}
-
-// === render authenticated profile ===
-
-/** 渲染当前用户资料和退出操作。 */
-export function ProfilePage() {
-  const session = useSession()
-  const navigate = useNavigate()
-  const [logoutError, setLogoutError] = useState(false)
-
-  async function handleLogout() {
-    setLogoutError(false)
-    try {
-      await session.logout()
-      navigate('/', { replace: true, flushSync: true })
-    } catch {
-      setLogoutError(true)
-    }
-  }
-
-  return (
-    <Page title="我的">
-      {session.status === 'authenticated' && (
-        <>
-          <p className="page__prompt">{session.session.user.nickname}</p>
-          {logoutError && <p role="alert">退出失败，请稍后重试。</p>}
-          <button type="button" onClick={handleLogout}>退出登录</button>
-        </>
-      )}
-    </Page>
-  )
 }
