@@ -24,6 +24,7 @@ const problem = (
 ) => ({ type: `/problems/${code}`, title: 'Request failed', status, code, detail: 'Internal detail' }) satisfies components['schemas']['Problem']
 const withdrawalFailures: ReadonlyArray<readonly [number, ProblemCode, string]> = [
   [403, 'forbidden', '你不是这条挂单的发布者'],
+  [403, 'internal_error', '停用失败'],
   [409, 'listing_unavailable', '列表已刷新'],
   [500, 'internal_error', '停用失败'],
 ]

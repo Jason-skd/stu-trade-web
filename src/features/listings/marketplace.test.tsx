@@ -244,6 +244,7 @@ describe('marketplace', () => {
     [401, 'unauthenticated', '登录状态已失效'],
     [403, 'forbidden', '没有权限'],
     [404, 'not_found', '挂单不存在'],
+    [409, 'internal_error', '成交服务暂时不可用'],
     [500, 'internal_error', '成交服务暂时不可用'],
   ] as const)('maps trade failure %s', async (status, code, message) => {
     await authenticate()

@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { components } from '../../api/generated/schema.ts'
 import { confirmOrderCompletion } from '../../api/orders.ts'
 import { login } from '../../api/session.ts'
@@ -148,6 +148,26 @@ describe('orders', () => {
     expect(router.state.location.search).toBe('?status=completed')
     expect(await screen.findByText('高等数学（第七版）')).toBeInTheDocument()
     expect(screen.getByText('双方已确认交付')).toBeInTheDocument()
+  })
+
+  it('treats a malformed 409 problem as unavailable without conflict refresh', async () => {
+    await authenticate()
+    const list = vi.fn(() => HttpResponse.json({
+      items: [order('malformed-order', '协议异常书')],
+      nextCursor: null,
+    }))
+    server.use(
+      http.get('*/api/v1/orders', list),
+      http.post('*/api/v1/orders/malformed-order/confirm-completion', () =>
+        HttpResponse.json({ unexpected: true }, { status: 409 })),
+    )
+    const user = userEvent.setup()
+    renderRoute()
+
+    await user.click(await screen.findByRole('button', { name: '确认已完成交付' }))
+    await user.click(screen.getByRole('button', { name: '确认交付完成' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('确认服务暂时不可用')
+    expect(list).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a conflict notice while refreshing both authoritative lists', async () => {
