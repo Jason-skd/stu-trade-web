@@ -1,7 +1,24 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { BookOpen, ImageOff, Search } from 'lucide-react'
-import { type FormEvent, type ReactNode, useEffect } from 'react'
-import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
+import { BookOpen, ImageOff, ReceiptText, Search } from 'lucide-react'
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom'
 import {
   getMarketplaceListing,
   listMarketplace,
@@ -10,6 +27,11 @@ import {
   type MarketplaceListing,
 } from '../../api/marketplace.ts'
 import { ApiProblem } from '../../api/problem.ts'
+import {
+  acceptBuyRequest,
+  purchaseSellListing,
+  type AcceptBuyRequestInput,
+} from '../../api/orders.ts'
 import { Page } from '../../shared/components/Page.tsx'
 import { useSession } from '../auth/session-context.ts'
 import './marketplace.css'
@@ -119,6 +141,174 @@ function detailFailure(error: unknown) {
     detail: '服务暂时不可用，请检查网络后重试。',
     retryable: true,
   }
+}
+
+function tradeFailure(error: unknown) {
+  if (!(error instanceof ApiProblem)) {
+    return '成交服务暂时不可用，请稍后重试。'
+  }
+
+  switch (error.problem.status) {
+    case 400:
+      return '实际交付书籍信息有误，请检查后重试。'
+    case 401:
+      return '登录状态已失效，请重新登录。'
+    case 403:
+      return '你没有权限处理这条挂单。'
+    case 404:
+      return '挂单不存在或已被移除。'
+    case 409:
+      return '挂单已被处理，详情已刷新。'
+    default:
+      return '成交服务暂时不可用，请稍后重试。'
+  }
+}
+
+async function invalidateTradeQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  kind: MarketplaceKind,
+  id: string,
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['marketplace'] }),
+    queryClient.invalidateQueries({ queryKey: ['marketplace-detail', kind, id] }),
+    queryClient.invalidateQueries({ queryKey: ['my-listings'] }),
+    queryClient.invalidateQueries({ queryKey: ['orders'] }),
+  ])
+}
+
+// === manage direct trade confirmation ===
+
+function DirectTradePanel({
+  kind,
+  listing,
+}: {
+  kind: MarketplaceKind
+  listing: MarketplaceListing
+}) {
+  const session = useSession()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [expanded, setExpanded] = useState(false)
+  const [message, setMessage] = useState('')
+  const submissionLocked = useRef(false)
+  const action = kind === 'sell' ? 'purchase' : 'accept'
+  const canTrade = listing.status === 'open' &&
+    listing.availableActions.includes(action)
+  const mutation = useMutation({
+    mutationFn: (input?: AcceptBuyRequestInput) => kind === 'sell'
+      ? purchaseSellListing(listing.id)
+      : acceptBuyRequest(listing.id, input!),
+  })
+
+  if (!canTrade) {
+    return message
+      ? <p className="trade-receipt__message" role="alert">{message}</p>
+      : null
+  }
+
+  // === enter authenticated trade flow ===
+
+  function beginTrade() {
+    if (session.status !== 'authenticated') {
+      const target = `${location.pathname}${location.search}${location.hash}`
+      navigate(`/login?returnTo=${encodeURIComponent(target)}`)
+      return
+    }
+    setMessage('')
+    setExpanded(true)
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (submissionLocked.current) return
+
+    let input: AcceptBuyRequestInput | undefined
+    if (kind === 'buy') {
+      const data = new FormData(event.currentTarget)
+      const book = {
+        isbn: String(data.get('isbn') ?? '').trim(),
+        title: String(data.get('title') ?? '').trim(),
+        author: String(data.get('author') ?? '').trim(),
+      }
+      if (book.isbn.length < 10 || !book.title || !book.author) {
+        setMessage('请完整填写 ISBN、书名和作者。')
+        return
+      }
+      input = {
+        book,
+        condition: String(data.get('condition')) as Condition,
+        note: String(data.get('note') ?? '').trim() || undefined,
+      }
+    }
+
+    setMessage('')
+    submissionLocked.current = true
+    try {
+      await mutation.mutateAsync(input)
+      await invalidateTradeQueries(queryClient, kind, listing.id)
+      navigate('/orders')
+    } catch (error) {
+      setMessage(tradeFailure(error))
+      if (error instanceof ApiProblem && error.problem.status === 409) {
+        await invalidateTradeQueries(queryClient, kind, listing.id)
+      }
+    } finally {
+      submissionLocked.current = false
+    }
+  }
+
+  if (!expanded) {
+    return (
+      <button className="trade-entry" type="button" onClick={beginTrade}>
+        {session.status === 'authenticated'
+          ? kind === 'sell' ? '确认购买' : '接受求购'
+          : kind === 'sell' ? '登录后确认购买' : '登录后接受求购'}
+      </button>
+    )
+  }
+
+  const amount = listingPrice(listing)
+  const counterparty = listing.owner.nickname
+  return (
+    <form className={`trade-receipt trade-receipt--${kind}`} onSubmit={submit}>
+      <header>
+        <ReceiptText aria-hidden="true" size={21} />
+        <div>
+          <h3>成交凭据</h3>
+          <p>确认后将立即生成订单，不能在此撤销。</p>
+        </div>
+      </header>
+      {kind === 'buy' && (
+        <fieldset>
+          <legend>实际交付书籍</legend>
+          <label>ISBN<input name="isbn" defaultValue={listing.book.isbn} minLength={10} required /></label>
+          <label>书名<input name="title" defaultValue={listing.book.title} required /></label>
+          <label>作者<input name="author" defaultValue={listing.book.author} required /></label>
+          <label>成色<select name="condition" defaultValue={listing.condition}>{conditions.map((condition) => <option key={condition} value={condition}>{conditionLabels[condition]}</option>)}</select></label>
+          <label className="trade-receipt__note">卖方备注<textarea name="note" rows={3} placeholder="例如笔记、破损或附件情况" /></label>
+        </fieldset>
+      )}
+      <dl>
+        <div><dt>书籍</dt><dd>{listing.book.title}</dd></div>
+        <div><dt>{kind === 'sell' ? '卖方' : '买方'}</dt><dd>{counterparty}</dd></div>
+        <div><dt>{kind === 'sell' ? '买方' : '卖方'}</dt><dd>你</dd></div>
+        <div><dt>固定成交价</dt><dd>{formatMoney(amount)}</dd></div>
+      </dl>
+      {message && <p className="trade-receipt__message" role="alert">{message}</p>}
+      <div className="trade-receipt__actions">
+        <button type="submit" disabled={mutation.isPending}>
+          {mutation.isPending
+            ? '正在成交…'
+            : kind === 'sell' ? '确认并生成订单' : '确认书籍并接单'}
+        </button>
+        <button type="button" disabled={mutation.isPending} onClick={() => setExpanded(false)}>
+          返回检查
+        </button>
+      </div>
+    </form>
+  )
 }
 
 // === render marketplace discovery ===
@@ -357,12 +547,8 @@ export function MarketplaceDetailPage({ kind }: { kind: MarketplaceKind }) {
             <p className={`detail-state detail-state--${listing.status}`}>
               {state}
             </p>
-            {listing.status === 'open' && !own && (
-              <p className="detail-guidance">
-                登录后可在后续交易流程中处理此挂单。
-              </p>
-            )}
           </div>
+          {!own && <DirectTradePanel kind={kind} listing={listing} />}
         </article>
       </div>
     </DetailFrame>
