@@ -53,6 +53,8 @@ describe('marketplace', () => {
   })
 
   it('restores filters from the URL and switches listing kind', async () => {
+    server.use(http.get('*/api/v1/buy-requests', () =>
+      HttpResponse.json({ items: [], nextCursor: null })))
     const user = userEvent.setup()
     const router = renderRoute('/?q=计算机&condition=like_new')
 

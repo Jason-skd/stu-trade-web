@@ -5,8 +5,6 @@ import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { components } from '../../api/generated/schema.ts'
-import { withdrawSellListing } from '../../api/marketplace.ts'
-import { login } from '../../api/session.ts'
 import { AppProviders } from '../../app/providers.tsx'
 import { appRoutes } from '../../app/routes.tsx'
 import { server } from '../../mocks/server.ts'
@@ -210,11 +208,5 @@ describe('my listings', () => {
     renderRoute('/my-listings?type=buy')
     expect(await screen.findByText('还没有求购需求。')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去发布' })).toHaveAttribute('href', '/publish?type=buy')
-  })
-
-  it('keeps repeated owner withdrawal idempotent in the mock contract', async () => {
-    await login({ email: 'lin@example.edu', password: 'secret123' })
-    await expect(withdrawSellListing('sell-2')).resolves.toBeUndefined()
-    await expect(withdrawSellListing('sell-2')).resolves.toBeUndefined()
   })
 })

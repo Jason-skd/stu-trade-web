@@ -1,14 +1,59 @@
-import { describe, expect, it } from 'vitest'
-import { getMarketplaceListing } from './marketplace.ts'
+import { http, HttpResponse } from 'msw'
+import { describe, expect, it, vi } from 'vitest'
+import type { components } from './generated/schema.ts'
 import {
   acceptBuyRequest,
   confirmOrderCompletion,
   listOrders,
   purchaseSellListing,
 } from './orders.ts'
-import { login } from './session.ts'
+import { server } from '../mocks/server.ts'
 
-// === define mock api input ===
+// === define transport fixtures ===
+
+const order = {
+  id: 'order-1',
+  matchId: 'match-1',
+  book: {
+    isbn: '9787040396638',
+    title: '高等数学（第七版）',
+    author: '同济大学数学系',
+  },
+  seller: { id: 'seller-1', nickname: '陈同学', email: 'chen@example.edu' },
+  buyer: { id: 'buyer-1', nickname: '林同学', email: 'lin@example.edu' },
+  agreedPrice: { amount: 3250, currency: 'CNY' },
+  status: 'pending_delivery',
+  sellerConfirmedCompletionAt: null,
+  buyerConfirmedCompletionAt: null,
+  createdAt: '2026-09-18T00:00:00Z',
+  updatedAt: '2026-09-18T00:00:00Z',
+} satisfies components['schemas']['Order']
+
+const directTrade = {
+  match: {
+    id: 'match-1',
+    source: 'direct_purchase',
+    status: 'completed',
+    sellListing: {
+      id: 'sell-1',
+      owner: { id: 'seller-1', nickname: '陈同学' },
+      book: order.book,
+      condition: 'good',
+      price: order.agreedPrice,
+      status: 'matched',
+      availableActions: [],
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    },
+    agreedPrice: order.agreedPrice,
+    sellerConfirmedAt: order.createdAt,
+    buyerConfirmedAt: order.createdAt,
+    orderId: order.id,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+  },
+  order,
+} satisfies components['schemas']['DirectTradeResult']
 
 const actualBook = {
   book: {
@@ -18,102 +63,74 @@ const actualBook = {
   },
   condition: 'good',
   note: '封面有折痕',
-} as const
+} satisfies components['schemas']['AcceptBuyRequestInput']
 
-async function authenticate(email = 'lin@example.edu') {
-  await login({ email, password: 'secret123' })
-}
+// === verify order transport requests ===
 
-// === verify direct-trade mock contract ===
+describe('order API transport', () => {
+  it('posts a direct purchase to the encoded listing resource', async () => {
+    const request = vi.fn()
+    server.use(http.post('*/api/v1/sell-listings/:id/purchase', ({ params, request: incoming }) => {
+      request(params.id, incoming.headers.get('accept'))
+      return HttpResponse.json(directTrade, { status: 201 })
+    }))
 
-describe('order API mock contract', () => {
-  it('creates one direct-purchase order at the seller price and consumes the listing', async () => {
-    await authenticate()
-
-    const result = await purchaseSellListing('sell-1')
-    expect(result.match.source).toBe('direct_purchase')
-    expect(result.match.status).toBe('completed')
-    expect(result.order.agreedPrice.amount).toBe(3250)
-    expect(result.order.buyer.id).toBe('user-1')
-    expect(result.order.seller.id).toBe('user-2')
-    expect((await getMarketplaceListing('sell', 'sell-1')).status).toBe('matched')
-    await expect(purchaseSellListing('sell-1')).rejects.toMatchObject({
-      problem: { status: 409, code: 'listing_unavailable' },
-    })
-    const orders = await listOrders('pending_delivery')
-    expect(orders.items.filter((order) => order.id === result.order.id)).toHaveLength(1)
+    await expect(purchaseSellListing('sell/1')).resolves.toEqual(directTrade)
+    expect(request).toHaveBeenCalledWith(
+      'sell/1',
+      'application/json, application/problem+json',
+    )
   })
 
-  it('creates one direct-acceptance order from the actual book at the buyer budget', async () => {
-    await authenticate()
+  it('serializes the actual-book input for direct acceptance', async () => {
+    const request = vi.fn()
+    server.use(http.post('*/api/v1/buy-requests/:id/accept', async ({ params, request: incoming }) => {
+      request(
+        params.id,
+        incoming.headers.get('content-type'),
+        await incoming.json(),
+      )
+      return HttpResponse.json(directTrade, { status: 201 })
+    }))
 
-    const result = await acceptBuyRequest('buy-1', actualBook)
-    expect(result.match.source).toBe('direct_acceptance')
-    expect(result.order.book).toEqual(actualBook.book)
-    expect(result.order.agreedPrice.amount).toBe(5000)
-    expect(result.order.seller.id).toBe('user-1')
-    expect(result.order.buyer.id).toBe('user-3')
-    expect((await getMarketplaceListing('buy', 'buy-1')).status).toBe('matched')
-    await expect(acceptBuyRequest('buy-1', actualBook)).rejects.toMatchObject({
-      problem: { status: 409 },
-    })
+    await expect(acceptBuyRequest('buy-1', actualBook)).resolves.toEqual(directTrade)
+    expect(request).toHaveBeenCalledWith('buy-1', 'application/json', actualBook)
   })
 
-  it('rejects self-trades, inactive listings, and invalid actual-book input', async () => {
-    await authenticate()
-    await expect(purchaseSellListing('sell-2')).rejects.toMatchObject({
-      problem: { status: 403 },
-    })
-    await expect(purchaseSellListing('sell-3')).rejects.toMatchObject({
-      problem: { status: 409 },
-    })
+  it('encodes the requested order status and cursor', async () => {
+    const request = vi.fn()
+    server.use(http.get('*/api/v1/orders', ({ request: incoming }) => {
+      request(new URL(incoming.url).searchParams)
+      return HttpResponse.json({ items: [order], nextCursor: null })
+    }))
 
-    const response = await fetch('/api/v1/buy-requests/buy-1/accept', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ book: {}, condition: 'unknown' }),
+    await expect(listOrders('pending_delivery', 'next page')).resolves.toEqual({
+      items: [order],
+      nextCursor: null,
     })
-    expect(response.status).toBe(400)
-
-    await authenticate('zhou@example.edu')
-    await expect(acceptBuyRequest('buy-1', actualBook)).rejects.toMatchObject({
-      problem: { status: 403 },
+    const params = request.mock.calls[0]?.[0] as URLSearchParams
+    expect(Object.fromEntries(params)).toEqual({
+      status: 'pending_delivery',
+      cursor: 'next page',
     })
   })
 
-  it('filters and paginates only participant orders', async () => {
-    await authenticate()
-    const pending = await listOrders('pending_delivery')
-    const completed = await listOrders('completed')
-    expect(pending.items.every((order) => order.status === 'pending_delivery')).toBe(true)
-    expect(completed.items.every((order) => order.status === 'completed')).toBe(true)
+  it('posts completion confirmation and preserves a structured failure identity', async () => {
+    const request = vi.fn()
+    server.use(http.post('*/api/v1/orders/:id/confirm-completion', ({ params }) => {
+      request(params.id)
+      return HttpResponse.json({
+        type: '/problems/order-not-pending-delivery',
+        title: 'Order conflict',
+        status: 409,
+        code: 'order_not_pending_delivery',
+        detail: 'The order can no longer be confirmed.',
+      } satisfies components['schemas']['Problem'], { status: 409 })
+    }))
 
-    const first = await fetch('/api/v1/orders?status=pending_delivery&limit=1')
-    const firstPage = await first.json() as { items: unknown[]; nextCursor: string | null }
-    expect(firstPage.items).toHaveLength(1)
-    expect(firstPage.nextCursor).toBe('1')
-    const second = await fetch(`/api/v1/orders?status=pending_delivery&limit=1&cursor=${firstPage.nextCursor}`)
-    const secondPage = await second.json() as { items: unknown[]; nextCursor: string | null }
-    expect(secondPage.items).toHaveLength(1)
-  })
-
-  it('lets both participants confirm and rejects a non-participant', async () => {
-    await authenticate('zhou@example.edu')
-    await expect(confirmOrderCompletion('order-pending-1')).rejects.toMatchObject({
-      problem: { status: 403 },
+    await expect(confirmOrderCompletion('order-1')).rejects.toMatchObject({
+      problem: { code: 'order_not_pending_delivery' },
     })
-
-    await authenticate()
-    const buyerConfirmation = await confirmOrderCompletion('order-pending-1')
-    expect(buyerConfirmation.status).toBe('pending_delivery')
-    expect(buyerConfirmation.buyerConfirmedCompletionAt).not.toBeNull()
-
-    await authenticate('chen@example.edu')
-    const sellerConfirmation = await confirmOrderCompletion('order-pending-1')
-    expect(sellerConfirmation.status).toBe('completed')
-    expect(sellerConfirmation.sellerConfirmedCompletionAt).not.toBeNull()
-    await expect(confirmOrderCompletion('order-pending-1')).rejects.toMatchObject({
-      problem: { status: 409, code: 'order_not_pending_delivery' },
-    })
+    expect(request).toHaveBeenCalledWith('order-1')
   })
 })

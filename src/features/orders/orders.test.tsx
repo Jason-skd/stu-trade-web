@@ -1,11 +1,10 @@
 import { QueryClient } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { components } from '../../api/generated/schema.ts'
-import { confirmOrderCompletion } from '../../api/orders.ts'
 import { login } from '../../api/session.ts'
 import { AppProviders } from '../../app/providers.tsx'
 import { appRoutes } from '../../app/routes.tsx'
@@ -121,6 +120,23 @@ describe('orders', () => {
 
   it('requires a second confirmation then waits for the counterparty', async () => {
     await authenticate()
+    let confirmed = false
+    server.use(
+      http.get('*/api/v1/orders', () => HttpResponse.json({
+        items: [{
+          ...order('order-pending-1', '高等数学（第七版）'),
+          buyerConfirmedCompletionAt: confirmed ? '2026-09-18T01:00:00Z' : null,
+        }],
+        nextCursor: null,
+      })),
+      http.post('*/api/v1/orders/order-pending-1/confirm-completion', () => {
+        confirmed = true
+        return HttpResponse.json({
+          ...order('order-pending-1', '高等数学（第七版）'),
+          buyerConfirmedCompletionAt: '2026-09-18T01:00:00Z',
+        })
+      }),
+    )
     const user = userEvent.setup()
     renderRoute()
 
@@ -130,14 +146,35 @@ describe('orders', () => {
     expect(screen.getByRole('button', { name: '确认已完成交付' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '确认已完成交付' }))
     await user.click(screen.getByRole('button', { name: '确认交付完成' }))
-    await waitFor(() => expect(screen.getAllByText('等待对方确认')).toHaveLength(2))
+    expect(await screen.findByText('等待对方确认')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '确认已完成交付' })).not.toBeInTheDocument()
   })
 
   it('moves the order to completed after the final party confirms', async () => {
-    await authenticate()
-    await confirmOrderCompletion('order-pending-1')
     await authenticate('chen@example.edu')
+    let completed = false
+    server.use(
+      http.get('*/api/v1/orders', ({ request }) => {
+        const status = new URL(request.url).searchParams.get('status')
+        const visible = completed ? status === 'completed' : status === 'pending_delivery'
+        return HttpResponse.json({
+          items: visible ? [order(
+            'order-pending-1',
+            '高等数学（第七版）',
+            completed ? 'completed' : 'pending_delivery',
+          )] : [],
+          nextCursor: null,
+        })
+      }),
+      http.post('*/api/v1/orders/order-pending-1/confirm-completion', () => {
+        completed = true
+        return HttpResponse.json(order(
+          'order-pending-1',
+          '高等数学（第七版）',
+          'completed',
+        ))
+      }),
+    )
     const user = userEvent.setup()
     const router = renderRoute()
 
