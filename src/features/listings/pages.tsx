@@ -383,10 +383,3 @@ function DetailFrame({ children }: { children: ReactNode }) {
     </div>
   )
 }
-
-// === render listing placeholders ===
-
-/** 渲染尚待实现的发布入口。 */
-export function PublishPage() {
-  return <Page title="发布" />
-}

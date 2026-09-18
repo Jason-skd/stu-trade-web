@@ -9,6 +9,8 @@ type LoginInput = components['schemas']['LoginInput']
 type SignupInput = components['schemas']['SignupInput']
 type SellListing = components['schemas']['SellListing']
 type BuyRequest = components['schemas']['BuyRequest']
+type CreateSellListingInput = components['schemas']['CreateSellListingInput']
+type CreateBuyRequestInput = components['schemas']['CreateBuyRequestInput']
 
 // === define problem fixtures ===
 
@@ -35,6 +37,7 @@ let currentSession: Session | null = null
 /** 清除测试之间共享的模拟会话。 */
 export function resetMockSession() {
   currentSession = null
+  resetMockListings()
 }
 
 // === define listing fixtures ===
@@ -53,7 +56,7 @@ const baseListing = {
   updatedAt: '2026-09-16T08:00:00+08:00',
 }
 
-const sellListings: SellListing[] = [
+const initialSellListings: SellListing[] = [
   {
     ...baseListing,
     id: 'sell-1',
@@ -87,7 +90,7 @@ const sellListings: SellListing[] = [
   },
 ]
 
-const buyRequests: BuyRequest[] = [
+const initialBuyRequests: BuyRequest[] = [
   {
     ...baseListing,
     id: 'buy-1',
@@ -103,6 +106,16 @@ const buyRequests: BuyRequest[] = [
   },
 ]
 
+let sellListings = structuredClone(initialSellListings)
+let buyRequests = structuredClone(initialBuyRequests)
+let nextListingId = 1
+
+function resetMockListings() {
+  sellListings = structuredClone(initialSellListings)
+  buyRequests = structuredClone(initialBuyRequests)
+  nextListingId = 1
+}
+
 // === filter listing fixtures ===
 
 function matchesSearch(item: SellListing | BuyRequest, request: Request) {
@@ -117,6 +130,54 @@ function matchesSearch(item: SellListing | BuyRequest, request: Request) {
   )
 }
 
+function listPage<T extends SellListing | BuyRequest>(items: T[], request: Request) {
+  const url = new URL(request.url)
+  let filtered: T[]
+  if (url.searchParams.get('mine') === 'true') {
+    if (!currentSession) return null
+    filtered = items.filter((item) => item.owner.id === currentSession?.user.id)
+  } else {
+    filtered = items.filter((item) =>
+      item.status === 'open' && matchesSearch(item, request))
+  }
+  const cursor = Number(url.searchParams.get('cursor') ?? 0)
+  const requestedLimit = Number(url.searchParams.get('limit') ?? 20)
+  const start = Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0
+  const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+    ? Math.min(requestedLimit, 100)
+    : 20
+  const next = start + limit
+  return {
+    items: filtered.slice(start, next),
+    nextCursor: next < filtered.length ? String(next) : null,
+  }
+}
+
+function now() {
+  return new Date().toISOString()
+}
+
+function forbiddenProblem(): Problem {
+  return { type: '/problems/forbidden', title: 'Forbidden', status: 403, code: 'forbidden', detail: 'The listing belongs to another user.' }
+}
+
+function unavailableProblem(): Problem {
+  return { type: '/problems/listing-unavailable', title: 'Listing unavailable', status: 409, code: 'listing_unavailable', detail: 'The listing is no longer open.' }
+}
+
+function withdraw<T extends SellListing | BuyRequest>(items: T[], id: string) {
+  if (!currentSession) return HttpResponse.json(unauthenticatedProblem, { status: 401 })
+  const item = items.find((candidate) => candidate.id === id)
+  if (!item) return HttpResponse.json(notFoundProblem, { status: 404 })
+  if (item.owner.id !== currentSession.user.id) return HttpResponse.json(forbiddenProblem(), { status: 403 })
+  if (item.status === 'withdrawn') return new HttpResponse(null, { status: 204 })
+  if (item.status !== 'open') return HttpResponse.json(unavailableProblem(), { status: 409 })
+  item.status = 'withdrawn'
+  item.availableActions = []
+  item.updatedAt = now()
+  return new HttpResponse(null, { status: 204 })
+}
+
 // === handle mock api requests ===
 
 /** 模拟当前已实现的会话和市集 HTTP 契约。 */
@@ -124,14 +185,14 @@ export const handlers = [
   http.post('*/api/v1/login', async ({ request }) => {
     const input = (await request.json()) as LoginInput
     currentSession = {
-      user: { id: 'mock-user', nickname: '校园用户', email: input.email },
+      user: { id: 'user-1', nickname: '校园用户', email: input.email },
     }
     return HttpResponse.json(currentSession)
   }),
   http.post('*/api/v1/signup', async ({ request }) => {
     const input = (await request.json()) as SignupInput
     currentSession = {
-      user: { id: 'mock-user', nickname: input.nickname, email: input.email },
+      user: { id: 'user-1', nickname: input.nickname, email: input.email },
     }
     return HttpResponse.json(currentSession, { status: 201 })
   }),
@@ -146,18 +207,48 @@ export const handlers = [
     currentSession = null
     return new HttpResponse(null, { status: 204 })
   }),
-  http.get('*/api/v1/sell-listings', ({ request }) =>
-    HttpResponse.json({
-      items: sellListings.filter((item) => matchesSearch(item, request)),
-      nextCursor: null,
-    }),
-  ),
-  http.get('*/api/v1/buy-requests', ({ request }) =>
-    HttpResponse.json({
-      items: buyRequests.filter((item) => matchesSearch(item, request)),
-      nextCursor: null,
-    }),
-  ),
+  http.get('*/api/v1/sell-listings', ({ request }) => {
+    const page = listPage(sellListings, request)
+    return page
+      ? HttpResponse.json(page)
+      : HttpResponse.json(unauthenticatedProblem, { status: 401 })
+  }),
+  http.get('*/api/v1/buy-requests', ({ request }) => {
+    const page = listPage(buyRequests, request)
+    return page
+      ? HttpResponse.json(page)
+      : HttpResponse.json(unauthenticatedProblem, { status: 401 })
+  }),
+  http.post('*/api/v1/sell-listings', async ({ request }) => {
+    if (!currentSession) return HttpResponse.json(unauthenticatedProblem, { status: 401 })
+    const input = (await request.json()) as CreateSellListingInput
+    const timestamp = now()
+    const owner = {
+      id: currentSession.user.id,
+      nickname: currentSession.user.nickname,
+    }
+    const item: SellListing = {
+      ...input, id: `mock-sell-${nextListingId++}`, owner, status: 'open',
+      availableActions: ['withdraw'], createdAt: timestamp, updatedAt: timestamp,
+    }
+    sellListings.unshift(item)
+    return HttpResponse.json(item, { status: 201 })
+  }),
+  http.post('*/api/v1/buy-requests', async ({ request }) => {
+    if (!currentSession) return HttpResponse.json(unauthenticatedProblem, { status: 401 })
+    const input = (await request.json()) as CreateBuyRequestInput
+    const timestamp = now()
+    const owner = {
+      id: currentSession.user.id,
+      nickname: currentSession.user.nickname,
+    }
+    const item: BuyRequest = {
+      ...input, id: `mock-buy-${nextListingId++}`, owner, status: 'open',
+      availableActions: ['withdraw'], createdAt: timestamp, updatedAt: timestamp,
+    }
+    buyRequests.unshift(item)
+    return HttpResponse.json(item, { status: 201 })
+  }),
   http.get('*/api/v1/sell-listings/:id', ({ params }) => {
     const item = sellListings.find((listing) => listing.id === params.id)
     return item
@@ -170,4 +261,6 @@ export const handlers = [
       ? HttpResponse.json(item)
       : HttpResponse.json(notFoundProblem, { status: 404 })
   }),
+  http.delete('*/api/v1/sell-listings/:id', ({ params }) => withdraw(sellListings, String(params.id))),
+  http.delete('*/api/v1/buy-requests/:id', ({ params }) => withdraw(buyRequests, String(params.id))),
 ]

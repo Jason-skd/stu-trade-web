@@ -3,6 +3,7 @@ import {
   ClipboardList,
   Handshake,
   LibraryBig,
+  ListChecks,
   PlusSquare,
   UserRound,
   type LucideIcon,
@@ -23,6 +24,7 @@ type NavigationItem = {
 const navigation: NavigationItem[] = [
   { label: '市集', path: '/', icon: LibraryBig, end: true },
   { label: '发布', path: '/publish', icon: PlusSquare },
+  { label: '我的发布', path: '/my-listings', icon: ListChecks },
   { label: '撮合', path: '/matches', icon: Handshake },
   { label: '订单', path: '/orders', icon: ClipboardList },
   { label: '我的', path: '/me', icon: UserRound },

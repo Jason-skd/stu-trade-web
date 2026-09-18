@@ -40,6 +40,10 @@ describe('application shell', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(within(navigation).getByRole('link', { name: '我的发布' })).toHaveAttribute(
+      'href',
+      '/my-listings',
+    )
     const ordersLink = within(navigation).getByRole('link', { name: '订单' })
     await user.click(ordersLink)
 
