@@ -6,7 +6,6 @@ const englishMessages = {
     reload: 'Reload',
     loadingMore: 'Loading…',
     loadMore: 'Load more',
-    isbn: 'ISBN',
     condition: {
       new: 'New',
       like_new: 'Like new',
@@ -256,7 +255,6 @@ const chineseMessages: Messages = {
     reload: '重新加载',
     loadingMore: '加载中…',
     loadMore: '加载更多',
-    isbn: 'ISBN',
     condition: { new: '全新', like_new: '近全新', good: '良好', fair: '一般', poor: '较差' },
     listingStatus: { open: '有效', reserved: '已撮合', matched: '已成交', withdrawn: '已停用' },
     orderStatus: { pending_delivery: '待交付', completed: '已完成' },
