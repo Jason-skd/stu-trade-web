@@ -38,7 +38,29 @@
 .detail-note { padding: var(--space-4); border-left: 3px solid var(--color-information-blue); background: var(--color-surface); }
 .detail-state { padding: var(--space-3) var(--space-4); border: 1px solid var(--color-campus-green); border-radius: var(--radius-sm); color: var(--color-campus-green); font-weight: 700; }
 .detail-state:not(.detail-state--open) { border-color: var(--color-divider); color: var(--color-muted); }
-.detail-guidance { color: var(--color-muted); }
+.trade-entry { width: 100%; min-height: 46px; padding: 0 var(--space-5); border: 1px solid var(--color-campus-green); border-radius: var(--radius-sm); background: var(--color-campus-green); color: var(--color-surface); font-weight: 700; cursor: pointer; }
+.listing-detail > .trade-entry, .listing-detail > .trade-receipt, .listing-detail > .trade-receipt__message { grid-column: 1 / -1; }
+.trade-receipt { margin-top: var(--space-5); padding: var(--space-5); border: 1px solid var(--color-campus-green); border-top-width: 4px; background: color-mix(in srgb, var(--color-surface) 88%, var(--color-campus-green)); }
+.trade-receipt--buy { border-color: var(--color-information-blue); background: color-mix(in srgb, var(--color-surface) 91%, var(--color-information-blue)); }
+.trade-receipt header { display: flex; gap: var(--space-3); align-items: flex-start; }
+.trade-receipt header svg { flex: 0 0 auto; margin-top: 2px; color: var(--color-campus-green); }
+.trade-receipt--buy header svg { color: var(--color-information-blue); }
+.trade-receipt h3 { margin: 0; font-family: var(--font-serif); font-size: 1.2rem; }
+.trade-receipt header p { margin: var(--space-1) 0 0; color: var(--color-muted); font-size: .875rem; }
+.trade-receipt fieldset { display: grid; grid-template-columns: 1fr; gap: var(--space-3); padding: var(--space-5) 0 0; margin: var(--space-5) 0 0; border: 0; border-top: 1px solid var(--color-divider); }
+.trade-receipt legend { padding: 0; font-weight: 700; }
+.trade-receipt label { display: grid; gap: var(--space-1); color: var(--color-muted); font-size: .875rem; font-weight: 600; }
+.trade-receipt input, .trade-receipt select, .trade-receipt textarea { width: 100%; min-height: 44px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-divider); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-ink); }
+.trade-receipt textarea { min-height: 5rem; resize: vertical; }
+.trade-receipt dl { margin: var(--space-5) 0 0; border-top: 1px solid var(--color-divider); }
+.trade-receipt dl div { grid-template-columns: 7rem minmax(0, 1fr); }
+.trade-receipt dl div:last-child dd { color: var(--color-campus-green); font-size: 1.05rem; }
+.trade-receipt__message { margin: var(--space-4) 0 0; color: var(--color-alert-red); font-weight: 700; }
+.trade-receipt__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-5); }
+.trade-receipt__actions button { min-height: 44px; padding: 0 var(--space-4); border: 1px solid var(--color-campus-green); border-radius: var(--radius-sm); background: var(--color-campus-green); color: var(--color-surface); font-weight: 700; cursor: pointer; }
+.trade-receipt--buy .trade-receipt__actions button { border-color: var(--color-information-blue); background: var(--color-information-blue); }
+.trade-receipt__actions button + button { border-color: var(--color-divider); background: transparent; color: var(--color-muted); }
+.trade-receipt__actions button:disabled { opacity: .65; cursor: wait; }
 .status-actions { display: flex; align-items: center; gap: var(--space-4); }
 .status-actions a { color: var(--color-campus-green); font-weight: 700; }
 .marketplace-detail-frame__list { display: none; }
@@ -60,4 +82,7 @@
   .marketplace-detail-frame__detail { min-width: 0; }
   .marketplace-detail-frame__detail .listing-detail { grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr); padding: var(--space-5); }
   .marketplace-detail-frame__detail .listing-detail > .listing-cover { width: 100%; height: auto; aspect-ratio: 3 / 4; }
+  .listing-detail > .trade-entry, .listing-detail > .trade-receipt, .listing-detail > .trade-receipt__message { grid-column: 2; }
+  .trade-receipt fieldset { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trade-receipt__note { grid-column: 1 / -1; }
 }

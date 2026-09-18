@@ -1,0 +1,41 @@
+.order-tabs { display: flex; gap: var(--space-2); margin-top: var(--space-6); }
+.order-tabs button { min-height: 44px; padding: 0 var(--space-4); border: 1px solid var(--color-divider); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-muted); font-weight: 700; cursor: pointer; }
+.order-tabs button[aria-current='page'] { border-color: var(--color-campus-green); background: var(--color-campus-green); color: var(--color-surface); }
+.order-notice { padding: var(--space-3) var(--space-4); margin: var(--space-5) 0 0; border-left: 3px solid var(--color-alert-red); background: var(--color-surface); color: var(--color-alert-red); font-weight: 700; }
+.order-ledger { margin-top: var(--space-6); border-top: 3px solid var(--color-ink); }
+.order-ledger > ul { padding: 0; margin: 0; list-style: none; }
+.order-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); padding: var(--space-6) 0; border-bottom: 1px solid var(--color-divider); }
+.order-row__book { display: flex; min-width: 0; flex-direction: column; gap: 3px; color: var(--color-muted); font-size: .8125rem; }
+.order-row__book strong { color: var(--color-ink); font-family: var(--font-serif); font-size: 1.15rem; }
+.order-row__facts { display: grid; gap: var(--space-3); margin: 0; }
+.order-row__facts div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-3); }
+.order-row__facts dt { color: var(--color-muted); }
+.order-row__facts dd { min-width: 0; margin: 0; font-weight: 700; }
+.order-row__facts a { display: block; overflow-wrap: anywhere; color: var(--color-information-blue); font-size: .8125rem; font-weight: 500; text-underline-offset: 3px; }
+.order-progress { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.order-progress span { padding: var(--space-1) var(--space-2); border: 1px solid var(--color-divider); border-radius: 999px; color: var(--color-muted); font-size: .8125rem; }
+.order-progress span.is-confirmed { border-color: var(--color-campus-green); color: var(--color-campus-green); }
+.order-row__state { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.order-row__state p { margin: 0; color: var(--color-muted); font-size: .875rem; }
+.order-status { color: var(--color-information-blue); font-weight: 700; }
+.order-status--completed { color: var(--color-campus-green); }
+.order-confirm-entry, .order-confirmation button, .order-state button, .order-load-more { min-height: 44px; padding: 0 var(--space-4); border: 1px solid var(--color-campus-green); border-radius: var(--radius-sm); background: var(--color-campus-green); color: var(--color-surface); font-weight: 700; cursor: pointer; }
+.order-confirm-entry { justify-self: start; }
+.order-confirmation { padding: var(--space-4); border-left: 3px solid var(--color-information-blue); background: var(--color-surface); }
+.order-confirmation p { max-width: 42rem; margin: 0; color: var(--color-muted); }
+.order-confirmation div { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-4); }
+.order-confirmation button + button { border-color: var(--color-divider); background: transparent; color: var(--color-muted); }
+.order-confirmation button:disabled, .order-load-more:disabled { opacity: .65; cursor: wait; }
+.order-row__message { margin: 0; color: var(--color-alert-red); font-weight: 700; }
+.order-state { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-12) var(--space-4); color: var(--color-muted); text-align: center; }
+.order-state p { margin: 0; color: var(--color-ink); font-family: var(--font-serif); font-size: 1.2rem; font-weight: 700; }
+.order-load-more { display: block; margin: var(--space-6) auto 0; }
+.order-footnote { display: flex; gap: var(--space-2); align-items: center; margin: var(--space-6) 0 0; color: var(--color-muted); font-size: .875rem; }
+.order-footnote svg { flex: 0 0 auto; color: var(--color-campus-green); }
+@media (min-width: 48rem) {
+  .order-row { grid-template-columns: minmax(14rem, 1.3fr) minmax(17rem, 1fr) minmax(10rem, .8fr); column-gap: var(--space-8); }
+  .order-progress { grid-column: 1 / 3; }
+  .order-confirmation, .order-row__message { grid-column: 1 / -1; }
+  .order-row__state { grid-column: 3; grid-row: 1; align-content: start; justify-content: flex-end; text-align: right; }
+  .order-confirm-entry { grid-column: 3; grid-row: 2; justify-self: end; }
+}
