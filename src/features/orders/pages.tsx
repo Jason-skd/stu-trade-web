@@ -9,42 +9,33 @@ import {
   type OrderStatus,
 } from '../../api/orders.ts'
 import { ApiProblem } from '../../api/problem.ts'
+import { useLocale } from '../../app/locale-context.ts'
+import type { Messages } from '../../app/messages.ts'
 import { Page } from '../../shared/components/Page.tsx'
 import { useSession } from '../auth/session-context.ts'
 import './orders.css'
 
 // === define order presentation ===
 
-const statusLabels: Record<OrderStatus, string> = {
-  pending_delivery: '待交付',
-  completed: '已完成',
-}
-
 function statusFrom(params: URLSearchParams): OrderStatus {
   return params.get('status') === 'completed' ? 'completed' : 'pending_delivery'
 }
 
-function formatMoney(amount: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    style: 'currency',
-    currency: 'CNY',
-    minimumFractionDigits: 2,
-  }).format(amount / 100)
-}
+type ConfirmationError = keyof Messages['orders']['errors']
 
-function confirmationFailure(error: unknown) {
-  if (!(error instanceof ApiProblem)) return '确认服务暂时不可用，请稍后重试。'
+function confirmationFailure(error: unknown): ConfirmationError {
+  if (!(error instanceof ApiProblem)) return 'unavailable'
   switch (error.problem.status) {
     case 401:
-      return '登录状态已失效，请重新登录。'
+      return 'unauthenticated'
     case 403:
-      return '你不是这笔订单的参与者。'
+      return 'forbidden'
     case 404:
-      return '订单不存在或已被移除。'
+      return 'notFound'
     case 409:
-      return '订单状态已经变化，列表已刷新。'
+      return 'conflict'
     default:
-      return '确认服务暂时不可用，请稍后重试。'
+      return 'unavailable'
   }
 }
 
@@ -64,11 +55,12 @@ function OrderRow({
 }: {
   order: Order
   userId: string
-  onConflict: (message: string) => void
+  onConflict: (error: ConfirmationError) => void
 }) {
+  const { formatMoney, messages } = useLocale()
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
-  const [message, setMessage] = useState('')
+  const [error, setError] = useState<ConfirmationError | null>(null)
   const isSeller = order.seller.id === userId
   const counterparty = isSeller ? order.buyer : order.seller
   const mineConfirmed = isSeller
@@ -85,7 +77,7 @@ function OrderRow({
     },
     onError: async (error) => {
       const failure = confirmationFailure(error)
-      setMessage(failure)
+      setError(failure)
       if (error instanceof ApiProblem && error.problem.status === 409) {
         onConflict(failure)
         await invalidateOrders(queryClient)
@@ -101,49 +93,49 @@ function OrderRow({
         <span>ISBN {order.book.isbn}</span>
       </div>
       <dl className="order-row__facts">
-        <div><dt>成交价格</dt><dd>{formatMoney(order.agreedPrice.amount)}</dd></div>
-        <div><dt>我的角色</dt><dd>{isSeller ? '卖方' : '买方'}</dd></div>
+        <div><dt>{messages.orders.price}</dt><dd>{formatMoney(order.agreedPrice.amount)}</dd></div>
+        <div><dt>{messages.orders.role}</dt><dd>{isSeller ? messages.orders.seller : messages.orders.buyer}</dd></div>
         <div>
-          <dt>交易对象</dt>
+          <dt>{messages.orders.counterparty}</dt>
           <dd>{counterparty.nickname}<a href={`mailto:${counterparty.email}`}>{counterparty.email}</a></dd>
         </div>
       </dl>
-      <div className="order-progress" aria-label="交付确认进度">
-        <span className={mineConfirmed ? 'is-confirmed' : ''}>你：{mineConfirmed ? '已确认' : '待确认'}</span>
-        <span className={otherConfirmed ? 'is-confirmed' : ''}>对方：{otherConfirmed ? '已确认' : '待确认'}</span>
+      <div className="order-progress" aria-label={messages.orders.progress}>
+        <span className={mineConfirmed ? 'is-confirmed' : ''}>{messages.orders.me}: {mineConfirmed ? messages.orders.confirmed : messages.orders.awaitingConfirmation}</span>
+        <span className={otherConfirmed ? 'is-confirmed' : ''}>{messages.orders.other}: {otherConfirmed ? messages.orders.confirmed : messages.orders.awaitingConfirmation}</span>
       </div>
       <div className="order-row__state">
         <span className={`order-status order-status--${order.status}`}>
-          {statusLabels[order.status]}
+          {messages.common.orderStatus[order.status]}
         </span>
         {order.status === 'pending_delivery' && mineConfirmed && (
-          <p>等待对方确认</p>
+          <p>{messages.orders.waitingForOther}</p>
         )}
-        {order.status === 'completed' && <p>双方已确认交付</p>}
+        {order.status === 'completed' && <p>{messages.orders.bothConfirmed}</p>}
       </div>
       {order.status === 'pending_delivery' && !mineConfirmed && !confirming && (
         <button
           className="order-confirm-entry"
           type="button"
-          onClick={() => { setMessage(''); setConfirming(true) }}
+          onClick={() => { setError(null); setConfirming(true) }}
         >
-          确认已完成交付
+          {messages.orders.confirmEntry}
         </button>
       )}
       {confirming && (
         <div className="order-confirmation">
-          <p>请在线下完成书籍与款项交接后再确认。确认后需等待对方完成确认。</p>
+          <p>{messages.orders.confirmationDetail}</p>
           <div>
             <button type="button" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-              {mutation.isPending ? '确认中…' : '确认交付完成'}
+              {mutation.isPending ? messages.orders.confirming : messages.orders.confirm}
             </button>
             <button type="button" disabled={mutation.isPending} onClick={() => setConfirming(false)}>
-              暂不确认
+              {messages.orders.cancel}
             </button>
           </div>
         </div>
       )}
-      {message && <p className="order-row__message" role="alert">{message}</p>}
+      {error && <p className="order-row__message" role="alert">{messages.orders.errors[error]}</p>}
     </li>
   )
 }
@@ -152,9 +144,10 @@ function OrderRow({
 
 /** 渲染当前用户可筛选和分页的订单账簿。 */
 export function OrdersPage() {
+  const { messages } = useLocale()
   const session = useSession()
   const [params, setParams] = useSearchParams()
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState<ConfirmationError | null>(null)
   const status = statusFrom(params)
   const query = useInfiniteQuery({
     queryKey: ['orders', status],
@@ -169,33 +162,33 @@ export function OrdersPage() {
 
   const userId = session.status === 'authenticated' ? session.session.user.id : ''
   return (
-    <Page title="订单">
-      <nav className="order-tabs" aria-label="订单状态">
+    <Page title={messages.orders.title}>
+      <nav className="order-tabs" aria-label={messages.orders.statusNavigation}>
         {(['pending_delivery', 'completed'] as const).map((value) => (
           <button
             key={value}
             type="button"
             aria-current={status === value ? 'page' : undefined}
-            onClick={() => { setNotice(''); setParams({ status: value }) }}
+            onClick={() => { setNotice(null); setParams({ status: value }) }}
           >
-            {statusLabels[value]}
+            {messages.common.orderStatus[value]}
           </button>
         ))}
       </nav>
-      {notice && <p className="order-notice" role="alert">{notice}</p>}
+      {notice && <p className="order-notice" role="alert">{messages.orders.errors[notice]}</p>}
       <section className="order-ledger" aria-live="polite" aria-busy={query.isPending}>
-        {query.isPending && <p className="order-state">正在读取订单…</p>}
+        {query.isPending && <p className="order-state">{messages.orders.loading}</p>}
         {query.isError && (
           <div className="order-state" role="alert">
-            <p>订单暂时无法载入。</p>
-            <button type="button" onClick={() => query.refetch()}>重新加载</button>
+            <p>{messages.orders.failure}</p>
+            <button type="button" onClick={() => query.refetch()}>{messages.common.reload}</button>
           </div>
         )}
         {query.isSuccess && orders.length === 0 && (
           <div className="order-state">
             <BookOpen aria-hidden="true" />
-            <p>还没有{statusLabels[status]}订单。</p>
-            {status === 'pending_delivery' && <span>从市集完成交易后，订单会出现在这里。</span>}
+            <p>{messages.orders.empty(status)}</p>
+            {status === 'pending_delivery' && <span>{messages.orders.pendingEmptyDetail}</span>}
           </div>
         )}
         {orders.length > 0 && (
@@ -208,11 +201,11 @@ export function OrdersPage() {
             disabled={query.isFetchingNextPage}
             onClick={() => query.fetchNextPage()}
           >
-            {query.isFetchingNextPage ? '加载中…' : '加载更多订单'}
+            {query.isFetchingNextPage ? messages.common.loadingMore : messages.orders.loadMore}
           </button>
         )}
       </section>
-      <p className="order-footnote"><ClipboardCheck aria-hidden="true" size={18} />双方分别确认后，订单才会进入已完成。</p>
+      <p className="order-footnote"><ClipboardCheck aria-hidden="true" size={18} />{messages.orders.footnote}</p>
     </Page>
   )
 }
