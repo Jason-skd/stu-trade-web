@@ -13,6 +13,7 @@ import { server } from '../../mocks/server.ts'
 // === render marketplace route ===
 
 function renderRoute(path = '/') {
+  window.localStorage.setItem('stutrade.locale', 'zh-CN')
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })

@@ -32,6 +32,8 @@ import {
   purchaseSellListing,
   type AcceptBuyRequestInput,
 } from '../../api/orders.ts'
+import { useLocale } from '../../app/locale-context.ts'
+import type { Messages } from '../../app/messages.ts'
 import { Page } from '../../shared/components/Page.tsx'
 import { useSession } from '../auth/session-context.ts'
 import './marketplace.css'
@@ -39,35 +41,21 @@ import './marketplace.css'
 // === define marketplace presentation ===
 
 const conditions: Condition[] = ['new', 'like_new', 'good', 'fair', 'poor']
-const conditionLabels: Record<Condition, string> = {
-  new: '全新',
-  like_new: '近全新',
-  good: '良好',
-  fair: '一般',
-  poor: '较差',
-}
-
-function formatMoney(amount: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    style: 'currency',
-    currency: 'CNY',
-    minimumFractionDigits: 2,
-  }).format(amount / 100)
-}
 
 function listingPrice(listing: MarketplaceListing) {
   return 'price' in listing ? listing.price.amount : listing.maximumPrice.amount
 }
 
 function ListingCover({ listing }: { listing: MarketplaceListing }) {
+  const { messages } = useLocale()
   return listing.book.coverImageUrl ? (
     <img
       className="listing-cover"
       src={listing.book.coverImageUrl}
-      alt={`${listing.book.title}封面`}
+      alt={messages.marketplace.coverAlt(listing.book.title)}
     />
   ) : (
-    <span className="listing-cover listing-cover--empty" aria-label="暂无封面">
+    <span className="listing-cover listing-cover--empty" aria-label={messages.marketplace.noCover}>
       <ImageOff aria-hidden="true" size={22} />
     </span>
   )
@@ -80,6 +68,7 @@ function ListingRow({
   kind: MarketplaceKind
   listing: MarketplaceListing
 }) {
+  const { formatMoney, messages } = useLocale()
   const resource = kind === 'sell' ? 'sell-listings' : 'buy-requests'
   const { search } = useLocation()
   return (
@@ -95,7 +84,7 @@ function ListingRow({
         <span>{listing.book.author}</span>
         <span>ISBN {listing.book.isbn}</span>
       </div>
-      <span className="condition-tag">{conditionLabels[listing.condition]}</span>
+      <span className="condition-tag">{messages.common.condition[listing.condition]}</span>
       <strong className="listing-row__price">{formatMoney(listingPrice(listing))}</strong>
     </li>
   )
@@ -130,37 +119,37 @@ function Status({
 function detailFailure(error: unknown) {
   if (error instanceof ApiProblem && error.problem.code === 'not_found') {
     return {
-      title: '挂单不存在',
-      detail: '挂单可能已删除、失效或链接有误。',
+      kind: 'missing' as const,
       retryable: false,
     }
   }
 
   return {
-    title: '详情无法载入',
-    detail: '服务暂时不可用，请检查网络后重试。',
+    kind: 'unavailable' as const,
     retryable: true,
   }
 }
 
-function tradeFailure(error: unknown) {
+type TradeError = keyof Messages['marketplace']['trade']['errors']
+
+function tradeFailure(error: unknown): TradeError {
   if (!(error instanceof ApiProblem)) {
-    return '成交服务暂时不可用，请稍后重试。'
+    return 'unavailable'
   }
 
   switch (error.problem.status) {
     case 400:
-      return '实际交付书籍信息有误，请检查后重试。'
+      return 'invalidBook'
     case 401:
-      return '登录状态已失效，请重新登录。'
+      return 'unauthenticated'
     case 403:
-      return '你没有权限处理这条挂单。'
+      return 'forbidden'
     case 404:
-      return '挂单不存在或已被移除。'
+      return 'notFound'
     case 409:
-      return '挂单已被处理，详情已刷新。'
+      return 'conflict'
     default:
-      return '成交服务暂时不可用，请稍后重试。'
+      return 'unavailable'
   }
 }
 
@@ -186,12 +175,13 @@ function DirectTradePanel({
   kind: MarketplaceKind
   listing: MarketplaceListing
 }) {
+  const { formatMoney, messages } = useLocale()
   const session = useSession()
   const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState(false)
-  const [message, setMessage] = useState('')
+  const [error, setError] = useState<TradeError | null>(null)
   const submissionLocked = useRef(false)
   const action = kind === 'sell' ? 'purchase' : 'accept'
   const canTrade = listing.status === 'open' &&
@@ -203,8 +193,8 @@ function DirectTradePanel({
   })
 
   if (!canTrade) {
-    return message
-      ? <p className="trade-receipt__message" role="alert">{message}</p>
+    return error
+      ? <p className="trade-receipt__message" role="alert">{messages.marketplace.trade.errors[error]}</p>
       : null
   }
 
@@ -216,7 +206,7 @@ function DirectTradePanel({
       navigate(`/login?returnTo=${encodeURIComponent(target)}`)
       return
     }
-    setMessage('')
+    setError(null)
     setExpanded(true)
   }
 
@@ -233,7 +223,7 @@ function DirectTradePanel({
         author: String(data.get('author') ?? '').trim(),
       }
       if (book.isbn.length < 10 || !book.title || !book.author) {
-        setMessage('请完整填写 ISBN、书名和作者。')
+        setError('missingBook')
         return
       }
       input = {
@@ -243,14 +233,14 @@ function DirectTradePanel({
       }
     }
 
-    setMessage('')
+    setError(null)
     submissionLocked.current = true
     try {
       await mutation.mutateAsync(input)
       await invalidateTradeQueries(queryClient, kind, listing.id)
       navigate('/orders')
     } catch (error) {
-      setMessage(tradeFailure(error))
+      setError(tradeFailure(error))
       if (error instanceof ApiProblem && error.problem.status === 409) {
         await invalidateTradeQueries(queryClient, kind, listing.id)
       }
@@ -263,8 +253,8 @@ function DirectTradePanel({
     return (
       <button className="trade-entry" type="button" onClick={beginTrade}>
         {session.status === 'authenticated'
-          ? kind === 'sell' ? '确认购买' : '接受求购'
-          : kind === 'sell' ? '登录后确认购买' : '登录后接受求购'}
+          ? kind === 'sell' ? messages.marketplace.trade.buy : messages.marketplace.trade.accept
+          : kind === 'sell' ? messages.marketplace.trade.loginToBuy : messages.marketplace.trade.loginToAccept}
       </button>
     )
   }
@@ -276,35 +266,35 @@ function DirectTradePanel({
       <header>
         <ReceiptText aria-hidden="true" size={21} />
         <div>
-          <h3>成交凭据</h3>
-          <p>确认后将立即生成订单，不能在此撤销。</p>
+          <h3>{messages.marketplace.trade.receipt}</h3>
+          <p>{messages.marketplace.trade.receiptDetail}</p>
         </div>
       </header>
       {kind === 'buy' && (
         <fieldset>
-          <legend>实际交付书籍</legend>
+          <legend>{messages.marketplace.trade.deliveredBook}</legend>
           <label>ISBN<input name="isbn" defaultValue={listing.book.isbn} minLength={10} required /></label>
-          <label>书名<input name="title" defaultValue={listing.book.title} required /></label>
-          <label>作者<input name="author" defaultValue={listing.book.author} required /></label>
-          <label>成色<select name="condition" defaultValue={listing.condition}>{conditions.map((condition) => <option key={condition} value={condition}>{conditionLabels[condition]}</option>)}</select></label>
-          <label className="trade-receipt__note">卖方备注<textarea name="note" rows={3} placeholder="例如笔记、破损或附件情况" /></label>
+          <label>{messages.marketplace.trade.title}<input name="title" defaultValue={listing.book.title} required /></label>
+          <label>{messages.marketplace.trade.author}<input name="author" defaultValue={listing.book.author} required /></label>
+          <label>{messages.marketplace.condition}<select name="condition" defaultValue={listing.condition}>{conditions.map((condition) => <option key={condition} value={condition}>{messages.common.condition[condition]}</option>)}</select></label>
+          <label className="trade-receipt__note">{messages.marketplace.trade.sellerNote}<textarea name="note" rows={3} placeholder={messages.marketplace.trade.notePlaceholder} /></label>
         </fieldset>
       )}
       <dl>
-        <div><dt>书籍</dt><dd>{listing.book.title}</dd></div>
-        <div><dt>{kind === 'sell' ? '卖方' : '买方'}</dt><dd>{counterparty}</dd></div>
-        <div><dt>{kind === 'sell' ? '买方' : '卖方'}</dt><dd>你</dd></div>
-        <div><dt>固定成交价</dt><dd>{formatMoney(amount)}</dd></div>
+        <div><dt>{messages.marketplace.trade.book}</dt><dd>{listing.book.title}</dd></div>
+        <div><dt>{kind === 'sell' ? messages.marketplace.seller : messages.marketplace.buyer}</dt><dd>{counterparty}</dd></div>
+        <div><dt>{kind === 'sell' ? messages.marketplace.buyer : messages.marketplace.seller}</dt><dd>{messages.marketplace.you}</dd></div>
+        <div><dt>{messages.marketplace.trade.fixedPrice}</dt><dd>{formatMoney(amount)}</dd></div>
       </dl>
-      {message && <p className="trade-receipt__message" role="alert">{message}</p>}
+      {error && <p className="trade-receipt__message" role="alert">{messages.marketplace.trade.errors[error]}</p>}
       <div className="trade-receipt__actions">
         <button type="submit" disabled={mutation.isPending}>
           {mutation.isPending
-            ? '正在成交…'
-            : kind === 'sell' ? '确认并生成订单' : '确认书籍并接单'}
+            ? messages.marketplace.trade.pending
+            : kind === 'sell' ? messages.marketplace.trade.confirmOrder : messages.marketplace.trade.confirmBook}
         </button>
         <button type="button" disabled={mutation.isPending} onClick={() => setExpanded(false)}>
-          返回检查
+          {messages.marketplace.trade.review}
         </button>
       </div>
     </form>
@@ -315,6 +305,7 @@ function DirectTradePanel({
 
 /** 渲染可筛选和分页的公开挂单市集。 */
 export function MarketplacePage() {
+  const { messages } = useLocale()
   // === load marketplace listings ===
 
   const [params, setParams] = useSearchParams()
@@ -369,8 +360,8 @@ export function MarketplacePage() {
   // === render marketplace results ===
 
   return (
-    <Page title="市集">
-      <nav className="marketplace-tabs" aria-label="挂单类型">
+    <Page title={messages.marketplace.title}>
+      <nav className="marketplace-tabs" aria-label={messages.marketplace.listingType}>
         {(['sell', 'buy'] as const).map((kind) => (
           <button
             key={kind}
@@ -378,7 +369,7 @@ export function MarketplacePage() {
             aria-current={filters.kind === kind ? 'page' : undefined}
             onClick={() => updateFilters({ kind })}
           >
-            {kind === 'sell' ? '在售书籍' : '求购需求'}
+            {kind === 'sell' ? messages.marketplace.sellListings : messages.marketplace.buyRequests}
           </button>
         ))}
       </nav>
@@ -388,18 +379,18 @@ export function MarketplacePage() {
         onSubmit={submitSearch}
       >
         <label className="search-field">
-          <span className="sr-only">按 ISBN 或书名搜索</span>
+          <span className="sr-only">{messages.marketplace.searchLabel}</span>
           <Search aria-hidden="true" size={19} />
           <input
             key={filters.query}
             name="q"
             defaultValue={filters.query}
-            placeholder="输入 ISBN 或书名"
+            placeholder={messages.marketplace.searchPlaceholder}
           />
         </label>
-        <button type="submit">搜索</button>
+        <button type="submit">{messages.marketplace.search}</button>
         <label className="condition-field">
-          <span>成色</span>
+          <span>{messages.marketplace.condition}</span>
           <select
             value={filters.condition ?? ''}
             onChange={(event) =>
@@ -408,10 +399,10 @@ export function MarketplacePage() {
               })
             }
           >
-            <option value="">全部</option>
+            <option value="">{messages.marketplace.allConditions}</option>
             {conditions.map((value) => (
               <option key={value} value={value}>
-                {conditionLabels[value]}
+                {messages.common.condition[value]}
               </option>
             ))}
           </select>
@@ -423,24 +414,24 @@ export function MarketplacePage() {
         aria-busy={marketplaceQuery.isPending}
       >
         {marketplaceQuery.isPending && (
-          <Status title="正在整理书架" detail="挂单马上就来。" />
+          <Status title={messages.marketplace.loadingTitle} detail={messages.marketplace.loadingDetail} />
         )}
         {marketplaceQuery.isError && (
           <Status
-            title="市集暂时无法载入"
-            detail="请检查网络后重试。"
+            title={messages.marketplace.failureTitle}
+            detail={messages.marketplace.failureDetail}
             action={(
               <button
                 type="button"
                 onClick={() => marketplaceQuery.refetch()}
               >
-                重新加载
+                {messages.common.reload}
               </button>
             )}
           />
         )}
         {marketplaceQuery.isSuccess && listings.length === 0 && (
-          <Status title="没有找到挂单" detail="换个关键词或成色再看看。" />
+          <Status title={messages.marketplace.emptyTitle} detail={messages.marketplace.emptyDetail} />
         )}
         {listings.length > 0 && (
           <ul className="listing-list">
@@ -460,7 +451,7 @@ export function MarketplacePage() {
             disabled={marketplaceQuery.isFetchingNextPage}
             onClick={() => marketplaceQuery.fetchNextPage()}
           >
-            {marketplaceQuery.isFetchingNextPage ? '加载中…' : '查看更多'}
+            {marketplaceQuery.isFetchingNextPage ? messages.common.loadingMore : messages.marketplace.loadMore}
           </button>
         )}
       </section>
@@ -472,6 +463,7 @@ export function MarketplacePage() {
 
 /** 渲染挂单详情及其可用状态。 */
 export function MarketplaceDetailPage({ kind }: { kind: MarketplaceKind }) {
+  const { formatMoney, messages } = useLocale()
   const { listingId = '' } = useParams()
   const { search } = useLocation()
   const session = useSession()
@@ -483,23 +475,29 @@ export function MarketplaceDetailPage({ kind }: { kind: MarketplaceKind }) {
   if (detailQuery.isPending) {
     return (
       <DetailFrame>
-        <Status title="正在载入详情" detail="请稍候。" />
+        <Status title={messages.marketplace.detailLoadingTitle} detail={messages.marketplace.detailLoadingDetail} />
       </DetailFrame>
     )
   }
   if (detailQuery.isError) {
     const failure = detailFailure(detailQuery.error)
+    const title = failure.kind === 'missing'
+      ? messages.marketplace.detailMissingTitle
+      : messages.marketplace.detailFailureTitle
+    const detail = failure.kind === 'missing'
+      ? messages.marketplace.detailMissingDetail
+      : messages.marketplace.detailFailureDetail
     const action = (
       <span className="status-actions">
         {failure.retryable && (
-          <button type="button" onClick={() => detailQuery.refetch()}>重试</button>
+          <button type="button" onClick={() => detailQuery.refetch()}>{messages.common.retry}</button>
         )}
-        <Link to={back}>返回市集</Link>
+        <Link to={back}>{messages.marketplace.back}</Link>
       </span>
     )
     return (
       <DetailFrame>
-        <Status title={failure.title} detail={failure.detail} action={action} />
+        <Status title={title} detail={detail} action={action} />
       </DetailFrame>
     )
   }
@@ -508,20 +506,20 @@ export function MarketplaceDetailPage({ kind }: { kind: MarketplaceKind }) {
   const own = session.status === 'authenticated' &&
     session.session.user.id === listing.owner.id
   const state = listing.status !== 'open'
-    ? '此挂单已失效'
+    ? messages.marketplace.inactive
     : own
-      ? '这是你的挂单'
-      : '挂单仍然有效'
+      ? messages.marketplace.owned
+      : messages.marketplace.active
 
   return (
     <DetailFrame>
       <div className="detail-layout">
-        <Link className="detail-back" to={back}>返回市集</Link>
+        <Link className="detail-back" to={back}>{messages.marketplace.back}</Link>
         <article className="listing-detail">
           <ListingCover listing={listing} />
           <div>
             <p className={`detail-kind detail-kind--${kind}`}>
-              {kind === 'sell' ? '在售书籍' : '求购需求'}
+              {kind === 'sell' ? messages.marketplace.sellListings : messages.marketplace.buyRequests}
             </p>
             <h2>{listing.book.title}</h2>
             <p>{listing.book.author}</p>
@@ -531,15 +529,15 @@ export function MarketplaceDetailPage({ kind }: { kind: MarketplaceKind }) {
                 <dd>{listing.book.isbn}</dd>
               </div>
               <div>
-                <dt>成色</dt>
-                <dd>{conditionLabels[listing.condition]}</dd>
+                <dt>{messages.marketplace.condition}</dt>
+                <dd>{messages.common.condition[listing.condition]}</dd>
               </div>
               <div>
-                <dt>{kind === 'sell' ? '售价' : '最高预算'}</dt>
+                <dt>{kind === 'sell' ? messages.marketplace.price : messages.marketplace.maximumPrice}</dt>
                 <dd>{formatMoney(listingPrice(listing))}</dd>
               </div>
               <div>
-                <dt>发布者</dt>
+                <dt>{messages.marketplace.publisher}</dt>
                 <dd>{listing.owner.nickname}</dd>
               </div>
             </dl>
@@ -558,13 +556,14 @@ export function MarketplaceDetailPage({ kind }: { kind: MarketplaceKind }) {
 // === frame marketplace detail ===
 
 function DetailFrame({ children }: { children: ReactNode }) {
+  const { messages } = useLocale()
   return (
     <div className="marketplace-detail-frame">
-      <aside className="marketplace-detail-frame__list" aria-label="市集列表">
+      <aside className="marketplace-detail-frame__list" aria-label={messages.marketplace.list}>
         <MarketplacePage />
       </aside>
       <div className="marketplace-detail-frame__detail">
-        <Page title="挂单详情">{children}</Page>
+        <Page title={messages.marketplace.detailTitle}>{children}</Page>
       </div>
     </div>
   )

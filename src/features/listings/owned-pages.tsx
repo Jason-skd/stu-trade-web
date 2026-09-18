@@ -13,27 +13,17 @@ import {
   type MarketplaceListing,
 } from '../../api/marketplace.ts'
 import { ApiProblem } from '../../api/problem.ts'
+import { useLocale } from '../../app/locale-context.ts'
+import type { Messages } from '../../app/messages.ts'
 import { Page } from '../../shared/components/Page.tsx'
 import './owned-listings.css'
 
 // === define owned listing presentation ===
 
 const conditions: Condition[] = ['new', 'like_new', 'good', 'fair', 'poor']
-const conditionLabels: Record<Condition, string> = {
-  new: '全新', like_new: '近全新', good: '良好', fair: '一般', poor: '较差',
-}
-const statusLabels = {
-  open: '有效', reserved: '已撮合', matched: '已成交', withdrawn: '已停用',
-} as const
 
 function kindFrom(params: URLSearchParams): MarketplaceKind {
   return params.get('type') === 'buy' ? 'buy' : 'sell'
-}
-
-function formatMoney(amount: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    style: 'currency', currency: 'CNY', minimumFractionDigits: 2,
-  }).format(amount / 100)
 }
 
 function parseAmount(value: string) {
@@ -44,7 +34,16 @@ function parseAmount(value: string) {
   return Number.isSafeInteger(amount) && amount > 0 ? amount : null
 }
 
-class FieldError extends Error {}
+type PublishError = keyof Messages['publish']['errors']
+
+class FieldError extends Error {
+  readonly code: PublishError
+
+  constructor(code: PublishError) {
+    super(code)
+    this.code = code
+  }
+}
 
 async function invalidateListings(queryClient: ReturnType<typeof useQueryClient>, kind?: MarketplaceKind, id?: string) {
   await Promise.all([
@@ -60,11 +59,12 @@ async function invalidateListings(queryClient: ReturnType<typeof useQueryClient>
 
 /** 渲染出售和求购共用书籍字段的发布登记单。 */
 export function PublishPage() {
+  const { messages } = useLocale()
   const [params, setParams] = useSearchParams()
   const kind = kindFrom(params)
   const [price, setPrice] = useState('')
-  const [fieldError, setFieldError] = useState('')
-  const [serviceError, setServiceError] = useState('')
+  const [fieldError, setFieldError] = useState<PublishError | null>(null)
+  const [serviceError, setServiceError] = useState(false)
   const [created, setCreated] = useState<{
     kind: MarketplaceKind
     listing: MarketplaceListing
@@ -83,10 +83,10 @@ export function PublishPage() {
         title: String(data.get('title') ?? '').trim(),
         author: String(data.get('author') ?? '').trim(),
       }
-      if (book.isbn.length < 10) throw new FieldError('请输入至少 10 位 ISBN。')
-      if (!book.title) throw new FieldError('请输入书名。')
-      if (!book.author) throw new FieldError('请输入作者。')
-      if (amount === null) throw new FieldError('请输入大于 0 且最多两位小数的金额。')
+      if (book.isbn.length < 10) throw new FieldError('shortIsbn')
+      if (!book.title) throw new FieldError('missingTitle')
+      if (!book.author) throw new FieldError('missingAuthor')
+      if (amount === null) throw new FieldError('invalidAmount')
       const condition = String(data.get('condition')) as Condition
       const note = String(data.get('note') ?? '').trim() || undefined
       const listing = submittedKind === 'sell'
@@ -111,21 +111,21 @@ export function PublishPage() {
     if (mutation.isPending) return
     setParams(next === 'buy' ? { type: 'buy' } : {})
     setPrice('')
-    setFieldError('')
-    setServiceError('')
+    setFieldError(null)
+    setServiceError(false)
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (submitting.current) return
-    setFieldError('')
-    setServiceError('')
+    setFieldError(null)
+    setServiceError(false)
     submitting.current = true
     try {
       await mutation.mutateAsync({ form: event.currentTarget, submittedKind: kind })
     } catch (error) {
-      if (error instanceof FieldError) setFieldError(error.message)
-      else setServiceError('发布失败，请稍后重试。')
+      if (error instanceof FieldError) setFieldError(error.code)
+      else setServiceError(true)
     } finally {
       submitting.current = false
     }
@@ -134,14 +134,14 @@ export function PublishPage() {
   if (created) {
     const resource = created.kind === 'sell' ? 'sell-listings' : 'buy-requests'
     return (
-      <Page title="发布成功">
+      <Page title={messages.publish.successTitle}>
         <section className={`publish-success publish-success--${created.kind}`} aria-live="polite">
           <BookCheck aria-hidden="true" />
-          <h2>{created.kind === 'sell' ? '出售挂单已发布' : '求购需求已发布'}</h2>
-          <p>{created.listing.book.title} 已登记，可以立即查看详情。</p>
+          <h2>{created.kind === 'sell' ? messages.publish.sellSuccess : messages.publish.buySuccess}</h2>
+          <p>{messages.publish.successDetail(created.listing.book.title)}</p>
           <div className="publish-success__actions">
-            <Link to={`/${resource}/${created.listing.id}`}>查看挂单</Link>
-            <button type="button" onClick={() => { setCreated(null); setPrice('') }}>继续发布</button>
+            <Link to={`/${resource}/${created.listing.id}`}>{messages.publish.viewListing}</Link>
+            <button type="button" onClick={() => { setCreated(null); setPrice('') }}>{messages.publish.publishAnother}</button>
           </div>
         </section>
       </Page>
@@ -149,31 +149,31 @@ export function PublishPage() {
   }
 
   return (
-    <Page title="发布">
-      <nav className="owned-tabs" aria-label="发布类型">
-        <button type="button" disabled={mutation.isPending} aria-current={kind === 'sell' ? 'page' : undefined} onClick={() => switchKind('sell')}>出售书籍</button>
-        <button type="button" disabled={mutation.isPending} aria-current={kind === 'buy' ? 'page' : undefined} onClick={() => switchKind('buy')}>发布求购</button>
+    <Page title={messages.publish.title}>
+      <nav className="owned-tabs" aria-label={messages.publish.typeNavigation}>
+        <button type="button" disabled={mutation.isPending} aria-current={kind === 'sell' ? 'page' : undefined} onClick={() => switchKind('sell')}>{messages.publish.sellBook}</button>
+        <button type="button" disabled={mutation.isPending} aria-current={kind === 'buy' ? 'page' : undefined} onClick={() => switchKind('buy')}>{messages.publish.requestBook}</button>
       </nav>
       <form className={`publish-form publish-form--${kind}`} noValidate onSubmit={submit}>
         <fieldset>
-          <legend>书籍信息</legend>
+          <legend>{messages.publish.bookInformation}</legend>
           <label>ISBN<input name="isbn" required minLength={10} /></label>
-          <label>书名<input name="title" required /></label>
-          <label>作者<input name="author" required /></label>
+          <label>{messages.publish.titleLabel}<input name="title" required /></label>
+          <label>{messages.publish.author}<input name="author" required /></label>
         </fieldset>
         <fieldset>
-          <legend>成色与备注</legend>
-          <label>成色<select name="condition" defaultValue="good">{conditions.map((value) => <option key={value} value={value}>{conditionLabels[value]}</option>)}</select></label>
-          <label>备注<textarea name="note" rows={4} /></label>
+          <legend>{messages.publish.conditionAndNotes}</legend>
+          <label>{messages.marketplace.condition}<select name="condition" defaultValue="good">{conditions.map((value) => <option key={value} value={value}>{messages.common.condition[value]}</option>)}</select></label>
+          <label>{messages.publish.note}<textarea name="note" rows={4} /></label>
         </fieldset>
         <fieldset>
-          <legend>价格</legend>
-          <label>{kind === 'sell' ? '出售价格（元）' : '最高预算（元）'}<input inputMode="decimal" name="price" value={price} onChange={(event) => setPrice(event.target.value)} aria-describedby="price-guidance" /></label>
-          <small id="price-guidance">请输入大于 0 的金额，最多保留两位小数。</small>
+          <legend>{messages.publish.price}</legend>
+          <label>{kind === 'sell' ? messages.publish.sellPrice : messages.publish.maximumPrice}<input inputMode="decimal" name="price" value={price} onChange={(event) => setPrice(event.target.value)} aria-describedby="price-guidance" /></label>
+          <small id="price-guidance">{messages.publish.priceGuidance}</small>
         </fieldset>
-        {fieldError && <p className="form-message" role="alert">{fieldError}</p>}
-        {serviceError && <p className="form-message" role="alert">{serviceError}</p>}
-        <button className="publish-submit" type="submit" disabled={mutation.isPending}>{mutation.isPending ? '发布中…' : kind === 'sell' ? '发布出售' : '发布求购'}</button>
+        {fieldError && <p className="form-message" role="alert">{messages.publish.errors[fieldError]}</p>}
+        {serviceError && <p className="form-message" role="alert">{messages.publish.errors.unavailable}</p>}
+        <button className="publish-submit" type="submit" disabled={mutation.isPending}>{mutation.isPending ? messages.publish.publishing : kind === 'sell' ? messages.publish.publishSale : messages.publish.publishRequest}</button>
       </form>
     </Page>
   )
@@ -181,41 +181,45 @@ export function PublishPage() {
 
 // === manage owned listings ===
 
-function withdrawFailure(error: unknown) {
-  if (error instanceof ApiProblem && error.problem.status === 403) return '无法停用：你不是这条挂单的发布者。'
-  if (error instanceof ApiProblem && error.problem.status === 409) return '挂单状态已经变化，列表已刷新。'
-  return '停用失败，请稍后重试。'
+type WithdrawError = keyof Messages['owned']['errors']
+
+function withdrawFailure(error: unknown): WithdrawError {
+  if (error instanceof ApiProblem && error.problem.status === 403) return 'forbidden'
+  if (error instanceof ApiProblem && error.problem.status === 409) return 'conflict'
+  return 'unavailable'
 }
 
 function OwnedRow({ kind, listing }: { kind: MarketplaceKind; listing: MarketplaceListing }) {
+  const { formatMoney, messages } = useLocale()
   const [confirming, setConfirming] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState<'success' | WithdrawError | null>(null)
   const queryClient = useQueryClient()
   const resource = kind === 'sell' ? 'sell-listings' : 'buy-requests'
   const amount = 'price' in listing ? listing.price.amount : listing.maximumPrice.amount
   const mutation = useMutation({
     mutationFn: () => kind === 'sell' ? withdrawSellListing(listing.id) : withdrawBuyRequest(listing.id),
-    onSuccess: async () => { setMessage('发布已停用。'); setConfirming(false); await invalidateListings(queryClient, kind, listing.id) },
+    onSuccess: async () => { setMessage('success'); setConfirming(false); await invalidateListings(queryClient, kind, listing.id) },
     onError: async (error) => { setMessage(withdrawFailure(error)); await invalidateListings(queryClient, kind, listing.id) },
   })
   return (
     <li className="owned-row">
       <div className="owned-row__book"><strong>{listing.book.title}</strong><span>{listing.book.author}</span><span>ISBN {listing.book.isbn}</span></div>
-      <span>{conditionLabels[listing.condition]}</span>
-      <span className={`listing-status listing-status--${listing.status}`}>{statusLabels[listing.status]}</span>
-      <div className="owned-row__price"><small>{kind === 'sell' ? '售价' : '最高预算'}</small><strong>{formatMoney(amount)}</strong></div>
+      <span>{messages.common.condition[listing.condition]}</span>
+      <span className={`listing-status listing-status--${listing.status}`}>{messages.common.listingStatus[listing.status]}</span>
+      <div className="owned-row__price"><small>{kind === 'sell' ? messages.owned.salePrice : messages.owned.maximumPrice}</small><strong>{formatMoney(amount)}</strong></div>
       <div className="owned-row__actions">
-        <Link to={`/${resource}/${listing.id}`}>详情</Link>
-        {listing.availableActions.includes('withdraw') && !confirming && <button type="button" onClick={() => setConfirming(true)}>停用发布</button>}
-        {confirming && <span className="withdraw-confirm"><span>确认停用？</span><button type="button" disabled={mutation.isPending} onClick={() => mutation.mutate()}>确认</button><button type="button" disabled={mutation.isPending} onClick={() => setConfirming(false)}>取消</button></span>}
+        <Link to={`/${resource}/${listing.id}`}>{messages.owned.details}</Link>
+        {listing.availableActions.includes('withdraw') && !confirming && <button type="button" onClick={() => setConfirming(true)}>{messages.owned.withdraw}</button>}
+        {confirming && <span className="withdraw-confirm"><span>{messages.owned.confirmWithdraw}</span><button type="button" disabled={mutation.isPending} onClick={() => mutation.mutate()}>{messages.owned.confirm}</button><button type="button" disabled={mutation.isPending} onClick={() => setConfirming(false)}>{messages.owned.cancel}</button></span>}
       </div>
-      {message && <p className="owned-row__message" role={mutation.isError ? 'alert' : 'status'}>{message}</p>}
+      {message && <p className="owned-row__message" role={mutation.isError ? 'alert' : 'status'}>{message === 'success' ? messages.owned.withdrawn : messages.owned.errors[message]}</p>}
     </li>
   )
 }
 
 /** 渲染当前用户出售和求购挂单的账簿式列表。 */
 export function MyListingsPage() {
+  const { messages } = useLocale()
   const [params, setParams] = useSearchParams()
   const kind = kindFrom(params)
   const query = useInfiniteQuery({
@@ -235,17 +239,17 @@ export function MyListingsPage() {
     }
   }, [kind, params, setParams])
   return (
-    <Page title="我的发布">
-      <nav className="owned-tabs" aria-label="我的发布类型">
-        <button type="button" aria-current={kind === 'sell' ? 'page' : undefined} onClick={() => setParams({})}>出售</button>
-        <button type="button" aria-current={kind === 'buy' ? 'page' : undefined} onClick={() => setParams({ type: 'buy' })}>求购</button>
+    <Page title={messages.owned.title}>
+      <nav className="owned-tabs" aria-label={messages.owned.typeNavigation}>
+        <button type="button" aria-current={kind === 'sell' ? 'page' : undefined} onClick={() => setParams({})}>{messages.owned.sell}</button>
+        <button type="button" aria-current={kind === 'buy' ? 'page' : undefined} onClick={() => setParams({ type: 'buy' })}>{messages.owned.buy}</button>
       </nav>
       <section className="owned-ledger" aria-live="polite" aria-busy={query.isPending}>
-        {query.isPending && <p className="owned-state">正在读取发布记录…</p>}
-        {query.isError && <div className="owned-state" role="alert"><p>发布记录暂时无法载入。</p><button type="button" onClick={() => query.refetch()}>重新加载</button></div>}
-        {query.isSuccess && listings.length === 0 && <div className="owned-state"><BookOpen aria-hidden="true" /><p>还没有{kind === 'sell' ? '出售挂单' : '求购需求'}。</p><Link to={`/publish${kind === 'buy' ? '?type=buy' : ''}`}>去发布</Link></div>}
+        {query.isPending && <p className="owned-state">{messages.owned.loading}</p>}
+        {query.isError && <div className="owned-state" role="alert"><p>{messages.owned.failure}</p><button type="button" onClick={() => query.refetch()}>{messages.common.reload}</button></div>}
+        {query.isSuccess && listings.length === 0 && <div className="owned-state"><BookOpen aria-hidden="true" /><p>{messages.owned.empty(kind)}</p><Link to={`/publish${kind === 'buy' ? '?type=buy' : ''}`}>{messages.owned.publish}</Link></div>}
         {listings.length > 0 && <ul>{listings.map((listing) => <OwnedRow key={listing.id} kind={kind} listing={listing} />)}</ul>}
-        {query.hasNextPage && <button className="load-more" type="button" disabled={query.isFetchingNextPage} onClick={() => query.fetchNextPage()}>{query.isFetchingNextPage ? '加载中…' : '加载更多'}</button>}
+        {query.hasNextPage && <button className="load-more" type="button" disabled={query.isFetchingNextPage} onClick={() => query.fetchNextPage()}>{query.isFetchingNextPage ? messages.common.loadingMore : messages.common.loadMore}</button>}
       </section>
     </Page>
   )

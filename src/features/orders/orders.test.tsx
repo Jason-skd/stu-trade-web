@@ -47,6 +47,7 @@ async function authenticate(email = 'lin@example.edu') {
 }
 
 function renderRoute(path = '/orders') {
+  window.localStorage.setItem('stutrade.locale', 'zh-CN')
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(appRoutes, { initialEntries: [path] })
   render(<AppProviders queryClient={queryClient}><RouterProvider router={router} /></AppProviders>)

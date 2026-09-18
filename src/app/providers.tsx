@@ -1,6 +1,7 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { SessionProvider } from '../features/auth/session.tsx'
+import { LocaleProvider } from './locale.tsx'
 import { createQueryClient } from './query-client.ts'
 
 // === define provider inputs ===
@@ -17,8 +18,10 @@ export function AppProviders({ children, queryClient }: AppProvidersProps) {
   const [defaultQueryClient] = useState(createQueryClient)
 
   return (
-    <QueryClientProvider client={queryClient ?? defaultQueryClient}>
-      <SessionProvider>{children}</SessionProvider>
-    </QueryClientProvider>
+    <LocaleProvider>
+      <QueryClientProvider client={queryClient ?? defaultQueryClient}>
+        <SessionProvider>{children}</SessionProvider>
+      </QueryClientProvider>
+    </LocaleProvider>
   )
 }

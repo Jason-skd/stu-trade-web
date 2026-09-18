@@ -33,6 +33,7 @@ function authenticate() {
 }
 
 function renderRoute(path: string) {
+  window.localStorage.setItem('stutrade.locale', 'zh-CN')
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(appRoutes, { initialEntries: [path] })
   render(<AppProviders queryClient={queryClient}><RouterProvider router={router} /></AppProviders>)

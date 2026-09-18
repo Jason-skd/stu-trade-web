@@ -12,6 +12,8 @@ afterEach(() => {
   cleanup()
   server.resetHandlers()
   resetMockSession()
+  window.localStorage.clear()
+  document.documentElement.lang = 'en'
 })
 
 afterAll(() => server.close())

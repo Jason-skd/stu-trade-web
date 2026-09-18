@@ -2,6 +2,8 @@ import { useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { ApiProblem } from '../../api/problem.ts'
 import type { LoginInput, SignupInput } from '../../api/session.ts'
+import { useLocale } from '../../app/locale-context.ts'
+import type { Messages } from '../../app/messages.ts'
 import { Page } from '../../shared/components/Page.tsx'
 import { useSession } from './session-context.ts'
 import './auth.css'
@@ -12,29 +14,32 @@ function safeReturnTarget(value: string | null) {
   return value?.startsWith('/') && !value.startsWith('//') ? value : '/'
 }
 
-function authenticationErrorMessage(error: unknown) {
+type AuthError = keyof Messages['auth']['errors']
+
+function authenticationError(error: unknown): AuthError {
   if (error instanceof ApiProblem) {
     if (error.problem.code === 'invalid_credentials') {
-      return '邮箱或密码不正确。'
+      return 'invalidCredentials'
     }
     if (error.problem.code === 'email_taken') {
-      return '该邮箱已注册，请直接登录。'
+      return 'emailTaken'
     }
     if (error.problem.code === 'validation_failed') {
-      return '请检查填写内容后重试。'
+      return 'validationFailed'
     }
   }
-  return '服务暂时不可用，请稍后重试。'
+  return 'unavailable'
 }
 
 // === render authentication form ===
 
 function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const session = useSession()
+  const { messages } = useLocale()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const target = safeReturnTarget(params.get('returnTo'))
-  const [error, setError] = useState('')
+  const [error, setError] = useState<AuthError | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const submissionLocked = useRef(false)
 
@@ -53,37 +58,37 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
     const nickname = String(form.get('nickname') ?? '').trim()
 
     if (!email || !email.includes('@')) {
-      setError('请输入有效的邮箱地址。')
+      setError('invalidEmail')
       submissionLocked.current = false
       return
     }
     if (mode === 'signup' && !nickname) {
-      setError('请输入昵称。')
+      setError('missingNickname')
       submissionLocked.current = false
       return
     }
     if (email.length > 254) {
-      setError('邮箱地址不能超过 254 个字符。')
+      setError('emailTooLong')
       submissionLocked.current = false
       return
     }
     if (mode === 'signup' && nickname.length > 50) {
-      setError('昵称不能超过 50 个字符。')
+      setError('nicknameTooLong')
       submissionLocked.current = false
       return
     }
     if (password.length < 8) {
-      setError('密码至少需要 8 位。')
+      setError('passwordTooShort')
       submissionLocked.current = false
       return
     }
     if (password.length > 128) {
-      setError('密码不能超过 128 位。')
+      setError('passwordTooLong')
       submissionLocked.current = false
       return
     }
 
-    setError('')
+    setError(null)
     setSubmitting(true)
     try {
       if (mode === 'login') {
@@ -93,7 +98,7 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
       }
       navigate(target, { replace: true })
     } catch (cause) {
-      setError(authenticationErrorMessage(cause))
+      setError(authenticationError(cause))
     } finally {
       submissionLocked.current = false
       setSubmitting(false)
@@ -107,16 +112,16 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const alternateTarget = `${alternatePage}${returnQuery}`
 
   return (
-    <Page title={mode === 'login' ? '登录' : '注册'}>
+    <Page title={mode === 'login' ? messages.auth.login : messages.auth.signup}>
       <div className="auth-layout">
         <p className="auth-intro" role={target === '/' ? undefined : 'status'}>
           {target === '/'
-            ? '用校园身份继续发布、撮合与面交。'
-            : '请先登录，随后将返回刚才访问的页面。'}
+            ? messages.auth.intro
+            : messages.auth.returnIntro}
         </p>
         <form className="auth-form" onSubmit={submit}>
           <label>
-            邮箱
+            {messages.auth.email}
             <input
               name="email"
               type="email"
@@ -127,7 +132,7 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
           </label>
           {mode === 'signup' && (
             <label>
-              昵称
+              {messages.auth.nickname}
               <input
                 name="nickname"
                 autoComplete="nickname"
@@ -137,7 +142,7 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
             </label>
           )}
           <label>
-            密码
+            {messages.auth.password}
             <input
               name="password"
               type="password"
@@ -147,14 +152,18 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
               required
             />
           </label>
-          {error && <p className="auth-error" role="alert">{error}</p>}
+          {error && <p className="auth-error" role="alert">{messages.auth.errors[error]}</p>}
           <button disabled={submitting} type="submit">
-            {submitting ? '处理中…' : mode === 'login' ? '登录' : '注册并登录'}
+            {submitting
+              ? messages.auth.submitting
+              : mode === 'login' ? messages.auth.login : messages.auth.signupAndLogin}
           </button>
         </form>
         <p className="page__prompt">
-          {mode === 'login' ? '还没有账户？' : '已有账户？'}
-          <Link to={alternateTarget}>{mode === 'login' ? '注册' : '登录'}</Link>
+          {mode === 'login' ? messages.auth.noAccount : messages.auth.hasAccount}
+          <Link to={alternateTarget}>
+            {mode === 'login' ? messages.auth.signup : messages.auth.login}
+          </Link>
         </p>
       </div>
     </Page>

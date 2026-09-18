@@ -33,6 +33,7 @@ const problem = (
 // === render authentication route ===
 
 function renderRoute(path: string) {
+  window.localStorage.setItem('stutrade.locale', 'zh-CN')
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
