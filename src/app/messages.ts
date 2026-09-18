@@ -245,6 +245,7 @@ type WidenMessages<Value> = Value extends (...args: infer Args) => string
     ? string
     : { [Key in keyof Value]: WidenMessages<Value[Key]> }
 
+/** 所有语言字典共同遵循的文案结构。 */
 export type Messages = WidenMessages<typeof englishMessages>
 
 // === define Simplified Chinese messages ===
@@ -320,6 +321,7 @@ const chineseMessages: Messages = {
 
 // === expose locale dictionaries ===
 
+/** 按语言标识索引的完整界面文案。 */
 export const messagesByLocale = {
   en: englishMessages,
   'zh-CN': chineseMessages,
