@@ -5,8 +5,6 @@ import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { components } from '../../api/generated/schema.ts'
-import { withdrawSellListing } from '../../api/marketplace.ts'
-import { login } from '../../api/session.ts'
 import { AppProviders } from '../../app/providers.tsx'
 import { appRoutes } from '../../app/routes.tsx'
 import { server } from '../../mocks/server.ts'
@@ -24,6 +22,7 @@ const problem = (
 ) => ({ type: `/problems/${code}`, title: 'Request failed', status, code, detail: 'Internal detail' }) satisfies components['schemas']['Problem']
 const withdrawalFailures: ReadonlyArray<readonly [number, ProblemCode, string]> = [
   [403, 'forbidden', '你不是这条挂单的发布者'],
+  [403, 'internal_error', '停用失败'],
   [409, 'listing_unavailable', '列表已刷新'],
   [500, 'internal_error', '停用失败'],
 ]
@@ -209,11 +208,5 @@ describe('my listings', () => {
     renderRoute('/my-listings?type=buy')
     expect(await screen.findByText('还没有求购需求。')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去发布' })).toHaveAttribute('href', '/publish?type=buy')
-  })
-
-  it('keeps repeated owner withdrawal idempotent in the mock contract', async () => {
-    await login({ email: 'lin@example.edu', password: 'secret123' })
-    await expect(withdrawSellListing('sell-2')).resolves.toBeUndefined()
-    await expect(withdrawSellListing('sell-2')).resolves.toBeUndefined()
   })
 })

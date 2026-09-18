@@ -5,14 +5,14 @@ StuTrade Web 是 React + TypeScript 前端，通过 `/api/v1` 与业务宿主协
 ## 当前能力
 
 - React 19、TypeScript 6、Vite 8 和 Bun 1.4 基础工程。
-- 桌面顶部导航与移动底部导航组成的响应式应用壳层。
+- 桌面顶部导航与移动底部导航的应用壳层样式结构。
 - 市集浏览与详情，以及出售、求购、我的发布、停用和主动成交纵切。
 - 待交付/已完成订单账簿、双方线下交付确认，以及撮合、个人、登录、注册和 404 路由入口。
 - React Query 与会话 Provider 装配。
 - [`openapi/stu-trade.yaml`](openapi/stu-trade.yaml) 及生成的 TypeScript 传输类型。
-- MSW 开发/测试入口、组件行为测试、Oxlint 和完整构建检查。
+- MSW 开发/测试协议夹具、组件行为测试、Oxlint 和完整构建检查。
 
-当前撮合页面仍是骨架；MSW 已实现会话、市集、发布、本人列表、主动成交和订单履约流程。真实后端联调与浏览器 E2E 尚未完成。OpenAPI 中存在的其他 operation 不代表页面或后端 handler 已经完成。产品结构与设计边界见[组件说明](docs/project-description.md)，后续页面和联调工作见[实施方案](docs/implementation_plan.md)。
+当前撮合页面仍是骨架；MSW 只提供会话、市集、发布、主动成交和订单界面所需的确定性 HTTP 协议夹具，不模拟宿主业务决策。真实后端联调与浏览器 E2E 尚未完成。OpenAPI 中存在的其他 operation 不代表页面或后端 handler 已经完成。产品结构与设计边界见[组件说明](docs/project-description.md)，后续页面和联调工作见[实施方案](docs/implementation_plan.md)。
 
 ## 项目结构
 
@@ -32,7 +32,7 @@ HTTP 结构由本仓库的 OpenAPI 拥有；产品语义、宿主规则和跨组
 ## 开发
 
 ```bash
-bun install
+bun install --frozen-lockfile
 bun run dev
 ```
 

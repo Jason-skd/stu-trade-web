@@ -53,6 +53,8 @@ describe('marketplace', () => {
   })
 
   it('restores filters from the URL and switches listing kind', async () => {
+    server.use(http.get('*/api/v1/buy-requests', () =>
+      HttpResponse.json({ items: [], nextCursor: null })))
     const user = userEvent.setup()
     const router = renderRoute('/?q=计算机&condition=like_new')
 
@@ -244,6 +246,7 @@ describe('marketplace', () => {
     [401, 'unauthenticated', '登录状态已失效'],
     [403, 'forbidden', '没有权限'],
     [404, 'not_found', '挂单不存在'],
+    [409, 'internal_error', '成交服务暂时不可用'],
     [500, 'internal_error', '成交服务暂时不可用'],
   ] as const)('maps trade failure %s', async (status, code, message) => {
     await authenticate()

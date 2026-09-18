@@ -184,8 +184,12 @@ export function PublishPage() {
 type WithdrawError = keyof Messages['owned']['errors']
 
 function withdrawFailure(error: unknown): WithdrawError {
-  if (error instanceof ApiProblem && error.problem.status === 403) return 'forbidden'
-  if (error instanceof ApiProblem && error.problem.status === 409) return 'conflict'
+  if (error instanceof ApiProblem && error.problem.code === 'forbidden') return 'forbidden'
+  if (
+    error instanceof ApiProblem &&
+    (error.problem.code === 'listing_unavailable' ||
+      error.problem.code === 'conflict')
+  ) return 'conflict'
   return 'unavailable'
 }
 

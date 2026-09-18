@@ -25,14 +25,15 @@ type ConfirmationError = keyof Messages['orders']['errors']
 
 function confirmationFailure(error: unknown): ConfirmationError {
   if (!(error instanceof ApiProblem)) return 'unavailable'
-  switch (error.problem.status) {
-    case 401:
+  switch (error.problem.code) {
+    case 'unauthenticated':
       return 'unauthenticated'
-    case 403:
+    case 'forbidden':
       return 'forbidden'
-    case 404:
+    case 'not_found':
       return 'notFound'
-    case 409:
+    case 'order_not_pending_delivery':
+    case 'conflict':
       return 'conflict'
     default:
       return 'unavailable'
@@ -78,7 +79,11 @@ function OrderRow({
     onError: async (error) => {
       const failure = confirmationFailure(error)
       setError(failure)
-      if (error instanceof ApiProblem && error.problem.status === 409) {
+      if (
+        error instanceof ApiProblem &&
+        (error.problem.code === 'order_not_pending_delivery' ||
+          error.problem.code === 'conflict')
+      ) {
         onConflict(failure)
         await invalidateOrders(queryClient)
       }

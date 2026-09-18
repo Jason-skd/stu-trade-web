@@ -137,16 +137,17 @@ function tradeFailure(error: unknown): TradeError {
     return 'unavailable'
   }
 
-  switch (error.problem.status) {
-    case 400:
+  switch (error.problem.code) {
+    case 'validation_failed':
       return 'invalidBook'
-    case 401:
+    case 'unauthenticated':
       return 'unauthenticated'
-    case 403:
+    case 'forbidden':
       return 'forbidden'
-    case 404:
+    case 'not_found':
       return 'notFound'
-    case 409:
+    case 'listing_unavailable':
+    case 'conflict':
       return 'conflict'
     default:
       return 'unavailable'
@@ -241,7 +242,11 @@ function DirectTradePanel({
       navigate('/orders')
     } catch (error) {
       setError(tradeFailure(error))
-      if (error instanceof ApiProblem && error.problem.status === 409) {
+      if (
+        error instanceof ApiProblem &&
+        (error.problem.code === 'listing_unavailable' ||
+          error.problem.code === 'conflict')
+      ) {
         await invalidateTradeQueries(queryClient, kind, listing.id)
       }
     } finally {
