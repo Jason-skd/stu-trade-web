@@ -5,8 +5,8 @@ import { ProtectedRoute } from '../features/auth/ProtectedRoute.tsx'
 import {
   MarketplaceDetailPage,
   MarketplacePage,
-  PublishPage,
 } from '../features/listings/pages.tsx'
+import { MyListingsPage, PublishPage } from '../features/listings/owned-pages.tsx'
 import { MatchesPage } from '../features/matches/pages.tsx'
 import { OrdersPage } from '../features/orders/pages.tsx'
 import { NotFoundPage } from '../shared/components/Page.tsx'
@@ -30,6 +30,7 @@ export const appRoutes: RouteObject[] = [
         element: <MarketplaceDetailPage kind="buy" />,
       },
       { path: 'publish', element: <ProtectedRoute><PublishPage /></ProtectedRoute> },
+      { path: 'my-listings', element: <ProtectedRoute><MyListingsPage /></ProtectedRoute> },
       { path: 'matches', element: <ProtectedRoute><MatchesPage /></ProtectedRoute> },
       { path: 'orders', element: <ProtectedRoute><OrdersPage /></ProtectedRoute> },
       { path: 'me', element: <ProtectedRoute><ProfilePage /></ProtectedRoute> },
